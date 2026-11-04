@@ -1,0 +1,1 @@
+# RetroSense API\n\nThis FastAPI service is a prototype API for the dashboard. It accepts image/video uploads, creates a job, and streams simulated telemetry over WebSocket. It does not yet perform computer-vision gauge reading.\n\nStart with `pip install -r requirements.txt` then `uvicorn main:app --reload`.\n
