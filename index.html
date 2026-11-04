@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1118">
+  <meta name="description" content="RetroSense — AI-assisted legacy instrument digitization and monitoring">
+  <title>RetroSense | Instrument Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="#"><span class="brand-mark">R</span><span>RETRO<span class="accent">SENSE</span><small>INSTRUMENT INTELLIGENCE</small></span></a>
+    <div class="nav-label">WORKSPACE</div>
+    <a class="nav active" href="#overview">▦ <span>Overview</span></a>
+    <a class="nav" href="#capture">◉ <span>New capture</span></a>
+    <a class="nav" href="#history">▤ <span>Readings history</span></a>
+    <div class="side-bottom"><div class="connection"><i></i><span>LOCAL SYSTEM</span><b id="apiStatus">DEMO</b></div><p>RETROSENSE PROTOTYPE<br>v0.1.0 · BUILD 001</p></div>
+  </aside>
+  <main class="main" id="overview">
+    <header class="topbar"><div><div class="eyebrow">INDUSTRIAL MONITORING / WORKSPACE</div><h1>Instrument overview</h1></div><div class="top-actions"><span class="live-pill"><i></i> SYSTEM READY</span><button class="btn btn-primary" onclick="document.querySelector('#capture').scrollIntoView({behavior:'smooth'})">＋ New capture</button></div></header>
+    <section class="stats">
+      <article class="stat"><span>ACTIVE INSTRUMENT</span><strong id="instrumentStat">01</strong><small>Connected session</small></article>
+      <article class="stat"><span>LATEST READING</span><strong><b id="latestStat">64.2</b> <em id="unitStat">PSI</em></strong><small id="readingTime">Waiting for data</small></article>
+      <article class="stat"><span>ALERT STATUS</span><strong class="status-normal" id="alertStat">NORMAL</strong><small>Threshold monitoring</small></article>
+      <article class="stat"><span>CAPTURE MODE</span><strong id="modeStat">ANALOG</strong><small>Image interpretation</small></article>
+    </section>
+    <section class="grid-main">
+      <article class="panel gauge-panel"><div class="panel-head"><div><div class="eyebrow">LIVE TELEMETRY</div><h2>Instrument reading</h2></div><span class="tag"><i></i> LIVE</span></div>
+        <div class="gauge-wrap"><div class="gauge"><svg viewBox="0 0 320 190" role="img" aria-label="Instrument gauge"><path class="gauge-track" d="M38 160 A122 122 0 0 1 282 160"/><path class="gauge-progress" id="gaugeArc" d="M38 160 A122 122 0 0 1 282 160"/><g id="ticks"></g><line id="needle" x1="160" y1="160" x2="160" y2="54" class="needle"/><circle cx="160" cy="160" r="8" class="hub"/></svg><div class="gauge-value"><strong id="gaugeValue">64.2</strong><span id="gaugeUnit">PSI</span></div></div></div>
+        <div class="gauge-footer"><span>MIN <b id="minLabel">0</b></span><span>MAX <b id="maxLabel">100</b></span><span>UPDATED <b id="updatedLabel">—</b></span></div>
+      </article>
+      <article class="panel chart-panel"><div class="panel-head"><div><div class="eyebrow">PERFORMANCE</div><h2>Reading trend</h2></div><span class="subtle">LAST 20 SAMPLES</span></div><div class="chart-wrap"><canvas id="trendChart"></canvas></div><div class="chart-legend"><span><i></i> Measured value</span><span>Thresholds shown in alert log</span></div></article>
+    </section>
+    <section class="grid-bottom">
+      <article class="panel capture-panel" id="capture"><div class="panel-head"><div><div class="eyebrow">INPUT CONFIGURATION</div><h2>New instrument capture</h2></div><span class="step">01 / INPUT</span></div>
+        <div class="mode-switch"><button class="mode active" data-mode="analog">◉ Analog gauge</button><button class="mode" data-mode="digital">▣ Digital display</button></div>
+        <label class="dropzone" id="dropzone"><input id="fileInput" type="file" accept="image/*,video/*"><span class="upload-icon">↑</span><b>Drop an image or video here</b><small>or <u>browse files</u> · JPG, PNG, MP4, MOV</small><span id="fileName" class="file-name">No file selected</span></label>
+        <div class="form-grid"><label>INSTRUMENT NAME<input id="machineName" value="Boiler pressure gauge" placeholder="e.g. Boiler pressure"></label><label>UNIT<select id="unit"><option>PSI</option><option>bar</option><option>°C</option><option>kPa</option><option>V</option><option>A</option><option>%</option></select></label><label>MINIMUM VALUE<input id="minValue" type="number" value="0"></label><label>MAXIMUM VALUE<input id="maxValue" type="number" value="100"></label><label>WARNING ABOVE<input id="warningLimit" type="number" value="75"></label><label>DANGER ABOVE<input id="dangerLimit" type="number" value="90"></label></div>
+        <button class="btn btn-primary btn-wide" id="analyzeBtn">Analyze instrument <span>→</span></button><p class="helper">Demo mode generates sample telemetry. Connect the FastAPI service to process uploaded files.</p>
+      </article>
+      <article class="panel alerts-panel"><div class="panel-head"><div><div class="eyebrow">EVENT MONITOR</div><h2>Recent alerts</h2></div><span class="subtle" id="alertCount">0 EVENTS</span></div><div id="alerts" class="alerts-list"><div class="empty">No alerts detected. System is monitoring.</div></div><div class="panel-foot">ALERTS ARE BASED ON CONFIGURED THRESHOLDS</div></article>
+    </section>
+    <section class="panel history-panel" id="history"><div class="panel-head"><div><div class="eyebrow">DATA LOG</div><h2>Reading history</h2></div><button class="btn btn-ghost" id="exportBtn">↓ Export CSV</button></div><div class="table-scroll"><table><thead><tr><th>TIMESTAMP</th><th>INSTRUMENT</th><th>READING</th><th>UNIT</th><th>STATUS</th></tr></thead><tbody id="historyBody"><tr><td colspan="5" class="empty">No readings yet. Start a demo capture.</td></tr></tbody></table></div></section>
+    <footer>RETROSENSE · AI-ASSISTED INSTRUMENT DIGITIZATION <span>PROTOTYPE — NOT FOR SAFETY-CRITICAL USE</span></footer>
+  </main>
+</div><script src="app.js"></script>
+</body></html>
