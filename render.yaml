@@ -1,13 +1,13 @@
 services:
   - type: web
     name: retrosense-api
-    runtime: python
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
     healthCheckPath: /api/health
+    autoDeployTrigger: checksPass
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.11
       - key: CORS_ORIGINS
         value: "https://sasinath18.github.io"
