@@ -11,9 +11,9 @@ def test_digital_manifest_reports_error_metrics_and_exact_matches(monkeypatch, t
     sample.write_bytes(b"sample-placeholder")
     manifest = tmp_path / "manifest.csv"
     manifest.write_text(
-        "image,expected_value,unit\\n"
-        "display.png,72.5,C\\n"
-        "display.png,,C\\n",
+        "image,expected_value,unit\n"
+        "display.png,72.5,C\n"
+        "display.png,,C\n",
         encoding="utf-8",
     )
 
@@ -40,7 +40,7 @@ def test_digital_manifest_reports_error_metrics_and_exact_matches(monkeypatch, t
 
 def test_digital_manifest_rejects_missing_required_columns(tmp_path):
     manifest = tmp_path / "bad.csv"
-    manifest.write_text("file,reading\\n", encoding="utf-8")
+    manifest.write_text("file,reading\n", encoding="utf-8")
     try:
         evaluator.evaluate_manifest(manifest)
     except ValueError as exc:
