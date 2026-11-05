@@ -52,9 +52,24 @@ Verify with `tesseract --version`.
 
 ## Deployment
 
-- GitHub Pages hosts the static dashboard only.
-- Render hosts the FastAPI backend using the root `render.yaml` blueprint.
-- After deploying the backend, set `window.RETROSENSE_API_URL` in the dashboard to the Render service URL before publishing the frontend. The Pages workflow deploys the repository root.
+### Frontend — GitHub Pages
+- The Pages workflow publishes the static dashboard from the repository root.
+- Expected project URL: `https://sasinath18.github.io/RetroSense/`.
+
+### Backend — Render
+1. In Render, create a **New + → Blueprint** service and connect this repository.
+2. Render reads the root `render.yaml` and creates the `retrosense-api` FastAPI web service.
+3. After the service is live, copy its public URL (for example, `https://retrosense-api.onrender.com`).
+4. In `index.html`, find the inline configuration immediately before `app.js` and set the URL:
+   ```html
+   <script>window.RETROSENSE_API_URL = "https://YOUR-RENDER-SERVICE.onrender.com";</script>
+   ```
+5. Commit and push that change. Keep the Render URL without a trailing slash.
+6. In Render, verify `GET /api/health` returns JSON with `"status": "ok"`.
+
+The dashboard uses `http://127.0.0.1:8000` automatically during local development. On a deployed dashboard, it will not send API requests to the GitHub Pages host when the Render URL is missing; it shows an explicit configuration message instead.
+
+The Render blueprint restricts browser API access to the GitHub Pages origin. If you use a custom frontend domain, update `CORS_ORIGINS` in `render.yaml` to that domain's origin (scheme + host only).
 
 ## API and validation
 
