@@ -214,7 +214,7 @@ async function run(withChart) {
   const jobsBeforeInvalid = calls.filter(call => call.url.endsWith("/api/jobs")).length;
   await elements.get("analyzeBtn").listeners.click();
   assert.equal(calls.filter(call => call.url.endsWith("/api/jobs")).length, jobsBeforeInvalid, "Invalid scale must stop before upload");
-  assert.ok(alerts.some(message => message.includes("Maximum value")), "Invalid scale should explain the problem");
+  assert.ok(alerts.some(message => message.includes("Maximum scale value")), "Invalid scale should explain the problem");
 
   element("maxValue").value = "100";
   await elements.get("analyzeBtn").listeners.click();
