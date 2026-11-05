@@ -32,3 +32,17 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{ou
   .topbar{gap:8px}
   .topbar h1{font-size:20px}
 }
+
+
+.calibration-hint{border-left:3px solid var(--blue);background:#0d1924;color:#aab9c6;padding:10px 12px;margin:12px 0;font-size:11px;line-height:1.65}
+.calibration-hint b{color:#dce7ef}
+.analysis-feedback{border:1px solid var(--line);background:#0b141d;color:#aab9c6;border-radius:6px;padding:11px 12px;margin:12px 0 4px;font-size:11px;line-height:1.65}
+.analysis-feedback.info{border-color:#2d526a;color:#b6d1e2}
+.analysis-feedback.success{border-color:#285244;color:var(--green)}
+.analysis-feedback.warning{border-color:#66512f;color:var(--amber)}
+.analysis-feedback.error{border-color:#713a42;color:var(--red)}
+.angle-field input:disabled{opacity:.45;cursor:not-allowed}
+.form-grid input::placeholder{color:#647687;opacity:1}
+@media(max-width:680px){
+  .calibration-hint,.analysis-feedback{font-size:10px}
+}
