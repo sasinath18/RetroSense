@@ -296,6 +296,17 @@ function showSelectedFile(file){
   if(previewUrl)URL.revokeObjectURL(previewUrl);
   previewUrl=URL.createObjectURL(file);
   const preview=$("#selectedPreview");preview.src=previewUrl;preview.hidden=false;
+
+  // Do not leave an older browser-cached measurement looking like the result
+  // for the newly selected image. Keep it in history, but clear the live card.
+  $("#latestStat").textContent="—";$("#unitStat").textContent="—";
+  $("#gaugeValue").textContent="—";$("#gaugeUnit").textContent="—";
+  $("#alertStat").textContent="WAITING";$("#alertStat").style.color="var(--muted)";
+  $("#readingTime").textContent="New image selected — analyze to get a fresh reading";
+  $("#updatedLabel").textContent="—";$("#minLabel").textContent="—";$("#maxLabel").textContent="—";
+  $("#modeStat").textContent=mode.toUpperCase();resetGauge();
+  samples=[];chart.data.labels=[];chart.data.datasets[0].data=[];chart.update("none");
+  showAnalysisFeedback("New image selected. The previous reading remains in history; analyze this image to obtain a fresh result.","info");
   return true;
 }
 document.querySelectorAll(".mode").forEach(button=>button.addEventListener("click",()=>{
