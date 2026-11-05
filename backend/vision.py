@@ -156,25 +156,29 @@ def _detect_pointer_angle_hough(gray, cx, cy, radius):
         if far_distance - near_distance < radius * 0.12:
             continue
 
-        angle_1 = math.degrees(math.atan2(y1 - cy, x1 - cx)) % 360.0
-        angle_2 = math.degrees(math.atan2(y2 - cy, x2 - cx)) % 360.0
-        width_1 = _radial_dark_width_score(gray, cx, cy, radius, angle_1)
-        width_2 = _radial_dark_width_score(gray, cx, cy, radius, angle_2)
-        width_margin = abs(width_1 - width_2)
-        wider_side_is_clear = width_margin >= max(0.8, max(width_1, width_2) * 0.14)
+        # Hough may return only one half of the needle axis, with its second
+        # endpoint almost at the hub. Test the far endpoint and the opposite
+        # direction of the same axis instead of treating that near-hub endpoint
+        # as a meaningful pointer direction.
+        far_endpoint = (x1, y1) if distance_1 >= distance_2 else (x2, y2)
+        far_angle = math.degrees(
+            math.atan2(far_endpoint[1] - cy, far_endpoint[0] - cx)
+        ) % 360.0
+        opposite_angle = (far_angle + 180.0) % 360.0
+        far_width = _radial_dark_width_score(gray, cx, cy, radius, far_angle)
+        opposite_width = _radial_dark_width_score(gray, cx, cy, radius, opposite_angle)
+        width_margin = abs(far_width - opposite_width)
+        wider_side_is_clear = width_margin >= max(0.8, max(far_width, opposite_width) * 0.14)
 
         if wider_side_is_clear:
-            # The thicker side is usually the actual pointer blade; the opposite
+            # The thicker side is usually the reading-pointer blade; the opposite
             # side is often a narrow balance tail that extends farther.
-            angle = angle_1 if width_1 > width_2 else angle_2
-            direction_width = max(width_1, width_2)
+            angle = far_angle if far_width > opposite_width else opposite_angle
+            direction_width = max(far_width, opposite_width)
         else:
             # On symmetric or very thin needles, retain the geometric fallback.
-            far_endpoint = (x1, y1) if distance_1 >= distance_2 else (x2, y2)
-            angle = math.degrees(
-                math.atan2(far_endpoint[1] - cy, far_endpoint[0] - cx)
-            ) % 360.0
-            direction_width = max(width_1, width_2)
+            angle = far_angle
+            direction_width = max(far_width, opposite_width)
 
         score = (
             length
