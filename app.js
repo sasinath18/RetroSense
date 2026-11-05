@@ -125,8 +125,7 @@ function restoreDashboardState(){
   $("#latestStat").textContent=value.toFixed(1);$("#unitStat").textContent=latest.unit||c.unit;
   $("#gaugeValue").textContent=value.toFixed(1);$("#gaugeUnit").textContent=latest.unit||c.unit;
   $("#readingTime").textContent="Restored from this browser · "+latest.displayTime;
-  $("#updatedLabel").textContent=latest.displayTime;$("#instrumentStat").textContent="01";
-  $("#instrumentStat").textContent=String(new Set(history.map(item=>item.name)).size).padStart(2,"0");$("#modeStat").textContent=(latest.mode||mode).toUpperCase();$("#alertStat").textContent=s||"UNKNOWN";
+  $("#updatedLabel").textContent=latest.displayTime;$("#instrumentStat").textContent=String(new Set(history.map(item=>item.name)).size).padStart(2,"0");$("#modeStat").textContent=(latest.mode||mode).toUpperCase();$("#alertStat").textContent=s||"UNKNOWN";
   $("#alertStat").style.color=s==="DANGER"?"var(--red)":s==="WARNING"?"var(--amber)":"var(--green)";
   const scale={min:Number.isFinite(latest.min)?latest.min:c.min,max:Number.isFinite(latest.max)?latest.max:c.max};
   updateGauge(value,scale);
@@ -375,7 +374,8 @@ async function captureCameraFrame({automatic=false}={}){
   const context=canvas.getContext("2d");context.drawImage(video,0,0,canvas.width,canvas.height);
   const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",0.92));
   if(!blob){$("#cameraStatus").textContent="Could not capture this frame. Try again.";return}
-  selectedFile=new File([blob],"retrosense-camera-"+Date.now()+".jpg",{type:"image/jpeg"});
+  const cameraFile=new File([blob],"retrosense-camera-"+Date.now()+".jpg",{type:"image/jpeg"});
+  if(!showSelectedFile(cameraFile))return;
   $("#fileName").textContent=selectedFile.name+" · camera frame";
   $("#cameraStatus").textContent="Frame captured. Sending image for analysis…";
   await startCapture({silent:automatic});
@@ -403,7 +403,7 @@ window.addEventListener("pagehide",closeCamera);
 $("#analyzeBtn").addEventListener("click",()=>startCapture());
 $("#exportBtn").addEventListener("click",()=>{if(!history.length){alert("No readings available to export.");return}const rows=[["timestamp","instrument","reading","unit","status"],...history.map(r=>[r.time,r.name,r.value,r.unit,r.status])];const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(",")).join("\n");const url=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));const a=document.createElement("a");a.href=url;a.download="retrosense-readings.csv";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)});
 async function checkApiConnection(){
-  if(!api){$("#apiStatus").textContent="NOT CONFIGURED";return}
+  if(!api){setApiState("NOT CONFIGURED");return}
   setApiState("CONNECTING");
   try{
     const response=await fetch(api+"/api/health",{signal:AbortSignal.timeout(isLocalHost?5000:90000)});
