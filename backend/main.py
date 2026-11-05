@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pathlib import Path
@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from vision import read_analog_gauge, GaugeReadError
 from digital_ocr import read_digital_display, DigitalReadError
 from storage import init_storage, load_jobs, save_job, list_readings
-import asyncio, csv, io, json, random, os, math
+import asyncio, csv, io, json, random, os, math, secrets
 
 app = FastAPI(title="RetroSense API", version="0.3.0")
 app.add_middleware(CORSMiddleware, allow_origins=[x.strip() for x in os.getenv("CORS_ORIGINS", "*").split(",") if x.strip()], allow_credentials=False,
@@ -19,6 +19,15 @@ init_storage()
 JOBS.update(load_jobs())
 MAX_UPLOAD_BYTES = 12 * 1024 * 1024
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/bmp"}
+
+
+def require_api_token(x_api_token: str | None = Header(default=None)):
+    """Require a shared API token when RETROSENSE_API_TOKEN is configured."""
+    expected = os.getenv("RETROSENSE_API_TOKEN", "").strip()
+    if expected and not secrets.compare_digest(x_api_token or "", expected):
+        raise HTTPException(401, "Invalid or missing API access token.")
+    return True
+
 
 
 
@@ -80,7 +89,7 @@ def health():
     return {"status": "ok", "service": "retrosense-api", "version": "0.3.0"}
 
 
-@app.post("/api/analyze")
+@app.post("/api/analyze", dependencies=[Depends(require_api_token)])
 async def analyze_image(file: UploadFile = File(...), mode: str = Form("analog"),
                         min_value: float = Form(0), max_value: float = Form(100),
                         start_angle: float = Form(135), end_angle: float = Form(45)):
@@ -96,7 +105,7 @@ async def analyze_image(file: UploadFile = File(...), mode: str = Form("analog")
         raise HTTPException(422, str(exc)) from exc
 
 
-@app.post("/api/jobs")
+@app.post("/api/jobs", dependencies=[Depends(require_api_token)])
 async def create_job(file: UploadFile = File(...), machine_name: str = Form("Instrument"),
                      mode: str = Form("analog"), unit: str = Form("PSI"),
                      min_value: float = Form(0), max_value: float = Form(100),
@@ -129,7 +138,7 @@ async def create_job(file: UploadFile = File(...), machine_name: str = Form("Ins
     return {"job_id": job_id, "status": "uploaded", "filename": safe_name}
 
 
-@app.post("/api/jobs/{job_id}/start")
+@app.post("/api/jobs/{job_id}/start", dependencies=[Depends(require_api_token)])
 def start_job(job_id: str):
     job = JOBS.get(job_id)
     if not job:
@@ -165,7 +174,7 @@ def start_job(job_id: str):
     }}
 
 
-@app.get("/api/jobs/{job_id}/export.csv")
+@app.get("/api/jobs/{job_id}/export.csv", dependencies=[Depends(require_api_token)])
 def export_csv(job_id: str):
     job = JOBS.get(job_id)
     if not job:
@@ -179,7 +188,7 @@ def export_csv(job_id: str):
         headers={"Content-Disposition": f'attachment; filename="retrosense-{job_id}.csv"'})
 
 
-@app.get("/api/readings")
+@app.get("/api/readings", dependencies=[Depends(require_api_token)])
 def get_readings():
     """Return readings persisted by this API instance's configured storage."""
     items = list_readings()
