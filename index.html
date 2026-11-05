@@ -30,16 +30,16 @@
       <article class="stat"><span>CAPTURE MODE</span><strong id="modeStat">ANALOG</strong><small>Image interpretation</small></article>
     </section>
     <section class="grid-main">
-      <article class="panel gauge-panel"><div class="panel-head"><div><div class="eyebrow">LIVE TELEMETRY</div><h2>Instrument reading</h2></div><span class="tag"><i></i> LIVE</span></div>
+      <article class="panel gauge-panel"><div class="panel-head"><div><div class="eyebrow">LATEST CAPTURE</div><h2>Instrument reading</h2></div><span class="tag"><i></i> READY</span></div>
         <div class="gauge-wrap"><div class="gauge"><svg viewBox="0 0 320 190" role="img" aria-label="Instrument gauge"><path class="gauge-track" d="M38 160 A122 122 0 0 1 282 160"/><path class="gauge-progress" id="gaugeArc" d="M38 160 A122 122 0 0 1 282 160"/><g id="ticks"></g><line id="needle" x1="160" y1="160" x2="160" y2="54" class="needle"/><circle cx="160" cy="160" r="8" class="hub"/></svg><div class="gauge-value"><strong id="gaugeValue">64.2</strong><span id="gaugeUnit">PSI</span></div></div></div>
         <div class="gauge-footer"><span>MIN <b id="minLabel">0</b></span><span>MAX <b id="maxLabel">100</b></span><span>UPDATED <b id="updatedLabel">—</b></span></div>
       </article>
-      <article class="panel chart-panel"><div class="panel-head"><div><div class="eyebrow">PERFORMANCE</div><h2>Reading trend</h2></div><span class="subtle">LAST 20 SAMPLES</span></div><div class="chart-wrap"><canvas id="trendChart"></canvas></div><div class="chart-legend"><span><i></i> Measured value</span><span>Thresholds shown in alert log</span></div></article>
+      <article class="panel chart-panel"><div class="panel-head"><div><div class="eyebrow">PERFORMANCE</div><h2>Reading trend</h2></div><span class="subtle">RECENT ANALYSES</span></div><div class="chart-wrap"><canvas id="trendChart"></canvas></div><div class="chart-legend"><span><i></i> Measured value</span><span>Thresholds shown in alert log</span></div></article>
     </section>
     <section class="grid-bottom">
       <article class="panel capture-panel" id="capture"><div class="panel-head"><div><div class="eyebrow">INPUT CONFIGURATION</div><h2>New instrument capture</h2></div><span class="step">01 / INPUT</span></div>
         <div class="mode-switch"><button class="mode active" data-mode="analog">◉ Analog gauge</button><button class="mode" data-mode="digital">▣ Digital display</button></div>
-        <label class="dropzone" id="dropzone"><input id="fileInput" type="file" accept="image/*,video/*"><span class="upload-icon">↑</span><b>Drop an image or video here</b><small>or <u>browse files</u> · JPG, PNG, MP4, MOV</small><span id="fileName" class="file-name">No file selected</span></label>
+        <label class="dropzone" id="dropzone"><input id="fileInput" type="file" accept="image/jpeg,image/png,image/webp,image/bmp"><span class="upload-icon">↑</span><b>Drop an instrument image here</b><small>or <u>browse files</u> · JPG, PNG, WEBP, BMP</small><span id="fileName" class="file-name">No file selected</span></label>
         <div class="form-grid"><label>INSTRUMENT NAME<input id="machineName" value="Boiler pressure gauge" placeholder="e.g. Boiler pressure"></label><label>UNIT<select id="unit"><option>PSI</option><option>bar</option><option>°C</option><option>kPa</option><option>V</option><option>A</option><option>%</option></select></label><label>MINIMUM VALUE<input id="minValue" type="number" value="0"></label><label>MAXIMUM VALUE<input id="maxValue" type="number" value="100"></label><label>WARNING ABOVE<input id="warningLimit" type="number" value="75"></label><label>DANGER ABOVE<input id="dangerLimit" type="number" value="90"></label><label>START ANGLE (DEG)<input id="startAngle" type="number" value="135" min="0" max="359"></label><label>END ANGLE (DEG)<input id="endAngle" type="number" value="45" min="0" max="359"></label></div>
         <button class="btn btn-primary btn-wide" id="analyzeBtn">Analyze instrument <span>→</span></button><p class="helper">Analog mode estimates a needle reading. Digital mode extracts numeric text using Tesseract OCR. Verify every result manually.</p>
       </article>
@@ -48,5 +48,5 @@
     <section class="panel history-panel" id="history"><div class="panel-head"><div><div class="eyebrow">DATA LOG</div><h2>Reading history</h2></div><button class="btn btn-ghost" id="exportBtn">↓ Export CSV</button></div><div class="table-scroll"><table><thead><tr><th>TIMESTAMP</th><th>INSTRUMENT</th><th>READING</th><th>UNIT</th><th>STATUS</th></tr></thead><tbody id="historyBody"><tr><td colspan="5" class="empty">No readings yet. Start a demo capture.</td></tr></tbody></table></div></section>
     <footer>RETROSENSE · AI-ASSISTED INSTRUMENT DIGITIZATION <span>PROTOTYPE — NOT FOR SAFETY-CRITICAL USE</span></footer>
   </main>
-</div><script src="app.js"></script>
+</div><script>window.RETROSENSE_API_URL = window.RETROSENSE_API_URL || "";</script><script src="app.js"></script>
 </body></html>
