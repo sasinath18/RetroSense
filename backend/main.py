@@ -11,7 +11,7 @@ import asyncio, csv, io, json, random, os, math, secrets
 import cv2
 import numpy as np
 
-app = FastAPI(title="RetroSense API", version="0.3.0")
+app = FastAPI(title="RetroSense API", version="0.4.0")
 app.add_middleware(CORSMiddleware, allow_origins=[x.strip() for x in os.getenv("CORS_ORIGINS", "*").split(",") if x.strip()], allow_credentials=False,
                    allow_methods=["GET", "POST"], allow_headers=["*"])
 STORE = Path("uploads")
@@ -101,7 +101,7 @@ def _analyse_job(job):
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "retrosense-api", "version": "0.3.0"}
+    return {"status": "ok", "service": "retrosense-api", "version": "0.4.0"}
 
 
 @app.post("/api/analyze", dependencies=[Depends(require_api_token)])
