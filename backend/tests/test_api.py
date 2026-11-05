@@ -5,7 +5,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fastapi.testclient import TestClient
+import cv2
+import numpy as np
 import main
+
+
+def valid_png():
+    ok, encoded = cv2.imencode('.png', np.full((32, 32, 3), 255, dtype=np.uint8))
+    assert ok
+    return encoded.tobytes()
 
 
 client = TestClient(main.app)
@@ -57,7 +65,7 @@ def test_create_job_and_start_uses_uploaded_image(monkeypatch, tmp_path):
         data={"machine_name": "Boiler pressure", "mode": "analog",
               "min_value": "0", "max_value": "100",
               "warning_limit": "70", "danger_limit": "90"},
-        files={"file": ("gauge.png", b"image-bytes", "image/png")},
+        files={"file": ("gauge.png", valid_png(), "image/png")},
     )
     assert created.status_code == 200
     job_id = created.json()["job_id"]
@@ -83,7 +91,7 @@ def test_csv_export_contains_actual_job_reading(monkeypatch, tmp_path):
     created = client.post(
         "/api/jobs",
         data={"mode": "digital", "warning_limit": "75", "danger_limit": "90"},
-        files={"file": ("display.png", b"image-bytes", "image/png")},
+        files={"file": ("display.png", valid_png(), "image/png")},
     )
     job_id = created.json()["job_id"]
     assert client.post(f"/api/jobs/{job_id}/start").status_code == 200
@@ -164,3 +172,13 @@ def test_health_endpoint_remains_public_when_api_token_is_enabled(monkeypatch):
     response = client.get("/api/health")
 
     assert response.status_code == 200
+
+
+
+def test_analyze_rejects_spoofed_image_mime_type():
+    response = client.post(
+        "/api/analyze",
+        files={"file": ("gauge.png", b"not really a png", "image/png")},
+    )
+    assert response.status_code == 415
+    assert "valid supported image" in response.json()["detail"]
