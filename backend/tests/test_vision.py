@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pytest
 from vision import (
     angle_to_value, GaugeReadError, _select_gauge_circle,
-    _detect_pointer_angle,
+    _detect_pointer_angle, _detect_pointer_angle_hough,
 )
 from evaluate_samples import calculate_metrics
 
@@ -27,6 +27,32 @@ def test_end_angle_maps_to_maximum():
 def test_pointer_outside_scale_is_rejected():
     with pytest.raises(GaugeReadError):
         angle_to_value(90, 0, 100, 135, 45)
+
+
+
+
+def test_hough_detector_uses_long_pointer_side_not_short_counterweight():
+    size, center, radius = 400, (200, 200), 160
+
+    def point(angle, distance):
+        radians = np.deg2rad(angle)
+        return (int(center[0] + distance * np.cos(radians)),
+                int(center[1] + distance * np.sin(radians)))
+
+    image = np.full((size, size), 245, dtype=np.uint8)
+    cv2.line(image, point(220, radius * 0.82), point(40, radius * 0.30), 15, 7)
+    detected = _detect_pointer_angle_hough(image, *center, radius)
+
+    assert detected is not None
+    angle, line_length, hub_offset = detected
+    assert angle == pytest.approx(220, abs=2)
+    assert line_length >= radius * 0.55
+    assert hub_offset <= radius * 0.08
+
+
+def test_angle_mapping_snaps_small_pointer_error_to_scale_endpoint():
+    assert angle_to_value(132, 0, 100, 135, 45) == pytest.approx(0)
+    assert angle_to_value(48, 0, 100, 135, 45) == pytest.approx(100)
 
 
 def test_invalid_value_range_is_rejected():
