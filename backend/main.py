@@ -188,6 +188,9 @@ def start_job(job_id: str):
         "timestamp": stamp, "instrument": job["machine_name"], "value": value,
         "unit": job["unit"], "status": status, "mode": job["mode"],
         "analysis": result,
+        "min_value": job["min_value"], "max_value": job["max_value"],
+        "warning_limit": job["warning_limit"], "danger_limit": job["danger_limit"],
+        "start_angle": job["start_angle"], "end_angle": job["end_angle"],
     }}
 
 
