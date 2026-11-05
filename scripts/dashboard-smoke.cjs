@@ -103,7 +103,7 @@ function makeDashboard({withChart = true} = {}) {
   const document = {
     querySelector(selector) {
       if (selector.startsWith("#")) return el(selector.slice(1));
-      return makeElement(selector);
+      return el(selector);
     },
     querySelectorAll(selector) {
       if (selector === ".mode") return modeButtons;
@@ -229,7 +229,7 @@ async function run(withChart) {
   assert.equal(elements.get("gaugeArc").style.opacity, "1", "Gauge light should turn on after a reading");
   assert.equal(elements.get("needle").style.opacity, "1", "Needle should appear after a reading");
   assert.equal(elements.get("gaugeReadState").textContent, "READING", "Gauge state should change after analysis");
-  assert.ok(elements.get("gauge-panel").classList.contains("has-reading"), "Gauge should enter its reading state");
+  assert.ok(elements.get(".gauge-panel").classList.contains("has-reading"), "Gauge should enter its reading state");
   assert.equal(elements.get("alertStat").textContent, "WARNING", "Threshold status should update");
   assert.ok(elements.get("historyBody").innerHTML.includes("Boiler pressure gauge"), "Reading should appear in history");
   assert.equal(elements.get("trendChart").getBoundingClientRect().width, 640, "Trend chart canvas should remain measurable");
