@@ -6,83 +6,160 @@ from uuid import uuid4
 from datetime import datetime, timezone
 from vision import read_analog_gauge, GaugeReadError
 from digital_ocr import read_digital_display, DigitalReadError
-import asyncio, csv, io, json, random, shutil
+import asyncio, csv, io, json, random
 
-app = FastAPI(title="RetroSense API", version="0.2.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
-STORE = Path("uploads"); STORE.mkdir(exist_ok=True)
+app = FastAPI(title="RetroSense API", version="0.3.0")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=False,
+                   allow_methods=["GET", "POST"], allow_headers=["*"])
+STORE = Path("uploads")
+STORE.mkdir(exist_ok=True)
 JOBS = {}
+MAX_UPLOAD_BYTES = 12 * 1024 * 1024
+ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/bmp"}
+
+
+def _validate_upload(file: UploadFile, mode: str):
+    if mode not in ("analog", "digital"):
+        raise HTTPException(400, "mode must be analog or digital")
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(415, "Upload JPG, PNG, WEBP or BMP.")
+    filename = Path(file.filename or "capture").name
+    if filename in ("", ".", ".."):
+        raise HTTPException(400, "Invalid filename.")
+    return filename
+
+
+async def _read_upload(file: UploadFile):
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    if not data:
+        raise HTTPException(400, "Uploaded image is empty.")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(413, "Image exceeds the 12 MB limit.")
+    return data
+
+
+def _analyse_job(job):
+    data = Path(job["path"]).read_bytes()
+    if job["mode"] == "digital":
+        return read_digital_display(data)
+    return read_analog_gauge(data, job["min_value"], job["max_value"],
+                             job["start_angle"], job["end_angle"])
+
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "retrosense-api", "version": "0.2.0"}
+    return {"status": "ok", "service": "retrosense-api", "version": "0.3.0"}
+
 
 @app.post("/api/analyze")
 async def analyze_image(file: UploadFile = File(...), mode: str = Form("analog"),
                         min_value: float = Form(0), max_value: float = Form(100),
                         start_angle: float = Form(135), end_angle: float = Form(45)):
-    if mode not in ("analog", "digital"):
-        raise HTTPException(400, "mode must be analog or digital")
+    _validate_upload(file, mode)
     if mode == "analog" and max_value <= min_value:
         raise HTTPException(400, "max_value must be greater than min_value")
-    if file.content_type not in ("image/jpeg", "image/png", "image/webp", "image/bmp"):
-        raise HTTPException(415, "Upload JPG, PNG, WEBP or BMP. Video analysis is not enabled yet.")
-    data = await file.read()
-    if len(data) > 12 * 1024 * 1024:
-        raise HTTPException(413, "Image exceeds the 12 MB limit.")
+    data = await _read_upload(file)
     try:
         if mode == "digital":
-            result = read_digital_display(data)
-            return {**result, "mode": "digital"}
-        result = read_analog_gauge(data, min_value, max_value, start_angle, end_angle)
-        return {**result, "mode": "analog"}
+            return {**read_digital_display(data), "mode": "digital"}
+        return {**read_analog_gauge(data, min_value, max_value, start_angle, end_angle),
+                "mode": "analog"}
     except (GaugeReadError, DigitalReadError) as exc:
-        raise HTTPException(422, str(exc))
+        raise HTTPException(422, str(exc)) from exc
+
 
 @app.post("/api/jobs")
 async def create_job(file: UploadFile = File(...), machine_name: str = Form("Instrument"),
                      mode: str = Form("analog"), unit: str = Form("PSI"),
                      min_value: float = Form(0), max_value: float = Form(100),
-                     warning_limit: float = Form(75), danger_limit: float = Form(90)):
-    if max_value <= min_value: raise HTTPException(400, "max_value must be greater than minimum value")
-    if danger_limit < warning_limit: raise HTTPException(400, "danger_limit must be >= warning_limit")
-    job_id = str(uuid4()); safe_name = Path(file.filename or "capture.bin").name
+                     warning_limit: float = Form(75), danger_limit: float = Form(90),
+                     start_angle: float = Form(135), end_angle: float = Form(45)):
+    safe_name = _validate_upload(file, mode)
+    if mode == "analog" and max_value <= min_value:
+        raise HTTPException(400, "max_value must be greater than minimum value")
+    if danger_limit < warning_limit:
+        raise HTTPException(400, "danger_limit must be >= warning_limit")
+    if not machine_name.strip():
+        raise HTTPException(400, "machine_name cannot be empty")
+    data = await _read_upload(file)
+    job_id = str(uuid4())
     destination = STORE / f"{job_id}_{safe_name}"
-    with destination.open("wb") as out: shutil.copyfileobj(file.file, out)
-    JOBS[job_id] = {"job_id": job_id, "filename": safe_name, "path": str(destination),
-        "machine_name": machine_name, "mode": mode, "unit": unit, "min_value": min_value,
-        "max_value": max_value, "warning_limit": warning_limit, "danger_limit": danger_limit,
-        "readings": [], "status": "uploaded"}
+    destination.write_bytes(data)
+    JOBS[job_id] = {
+        "job_id": job_id, "filename": safe_name, "path": str(destination),
+        "machine_name": machine_name.strip(), "mode": mode, "unit": unit,
+        "min_value": min_value, "max_value": max_value,
+        "warning_limit": warning_limit, "danger_limit": danger_limit,
+        "start_angle": start_angle, "end_angle": end_angle,
+        "readings": [], "status": "uploaded",
+    }
     return {"job_id": job_id, "status": "uploaded", "filename": safe_name}
+
 
 @app.post("/api/jobs/{job_id}/start")
 def start_job(job_id: str):
-    if job_id not in JOBS: raise HTTPException(404, "Job not found")
-    JOBS[job_id]["status"] = "running"
-    return {"job_id": job_id, "status": "running"}
+    job = JOBS.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    if job["status"] == "completed":
+        return {"job_id": job_id, "status": "completed",
+                "latest_reading": job["readings"][-1] if job["readings"] else None}
+    try:
+        result = _analyse_job(job)
+    except (GaugeReadError, DigitalReadError) as exc:
+        job["status"] = "failed"
+        job["error"] = str(exc)
+        raise HTTPException(422, str(exc)) from exc
+    value = float(result["value"])
+    status = ("DANGER" if value >= job["danger_limit"] else
+              "WARNING" if value >= job["warning_limit"] else "NORMAL")
+    stamp = datetime.now(timezone.utc).isoformat()
+    reading = [stamp, job["machine_name"], value, job["unit"], status]
+    job["readings"].append(reading)
+    job["latest_result"] = result
+    job["status"] = "completed"
+    return {"job_id": job_id, "status": "completed", "reading": {
+        "timestamp": stamp, "instrument": job["machine_name"], "value": value,
+        "unit": job["unit"], "status": status, "mode": job["mode"],
+        "analysis": result,
+    }}
+
 
 @app.get("/api/jobs/{job_id}/export.csv")
 def export_csv(job_id: str):
     job = JOBS.get(job_id)
-    if not job: raise HTTPException(404, "Job not found")
-    output = io.StringIO(); writer = csv.writer(output)
-    writer.writerow(["timestamp", "instrument", "value", "unit", "status"]); writer.writerows(job["readings"]); output.seek(0)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["timestamp", "instrument", "value", "unit", "status"])
+    writer.writerows(job["readings"])
+    output.seek(0)
     return StreamingResponse(iter([output.getvalue()]), media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="retrosense-{job_id}.csv"'})
 
+
 @app.websocket("/ws/jobs/{job_id}")
 async def stream_job(websocket: WebSocket, job_id: str):
-    await websocket.accept(); job = JOBS.get(job_id)
+    await websocket.accept()
+    job = JOBS.get(job_id)
     if not job:
-        await websocket.send_json({"error": "Job not found"}); await websocket.close(); return
+        await websocket.send_json({"error": "Job not found"})
+        await websocket.close()
+        return
+    # Demo stream only: this endpoint does not read a live camera or physical sensor.
     try:
         while True:
             low, high = job["min_value"], job["max_value"]
-            value = round(max(low, min(high, low + (high-low) * (0.55 + random.uniform(-0.06, 0.06)))), 2)
-            status = "DANGER" if value >= job["danger_limit"] else "WARNING" if value >= job["warning_limit"] else "NORMAL"
+            value = round(max(low, min(high, low + (high-low) *
+                         (0.55 + random.uniform(-0.06, 0.06)))), 2)
+            status = ("DANGER" if value >= job["danger_limit"] else
+                      "WARNING" if value >= job["warning_limit"] else "NORMAL")
             stamp = datetime.now(timezone.utc).isoformat()
-            job["readings"].append([stamp, job["machine_name"], value, job["unit"], status])
-            await websocket.send_text(json.dumps({"job_id": job_id, "value": value, "unit": job["unit"], "status": status, "timestamp": stamp}))
+            await websocket.send_text(json.dumps({
+                "job_id": job_id, "value": value, "unit": job["unit"],
+                "status": status, "timestamp": stamp, "source": "simulated_demo",
+            }))
             await asyncio.sleep(1)
     except WebSocketDisconnect:
         return
