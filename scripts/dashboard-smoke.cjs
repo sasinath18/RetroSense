@@ -42,6 +42,7 @@ function makeDashboard({withChart = true} = {}) {
       appendChild(child) { (this.children ||= []).push(child); },
       replaceChildren() { this.children = []; },
       getBoundingClientRect() { return {width: 640, height: 220}; },
+      scrollIntoView() {},
       getContext() {
         return {
           setTransform() {}, clearRect() {}, beginPath() {}, moveTo() {},
