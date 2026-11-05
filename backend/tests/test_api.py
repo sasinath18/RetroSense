@@ -100,3 +100,44 @@ def test_job_rejects_danger_threshold_below_warning():
         files={"file": ("gauge.png", b"image-bytes", "image/png")},
     )
     assert response.status_code == 400
+
+
+
+def test_analyze_rejects_non_finite_measurement_range():
+    response = client.post(
+        "/api/analyze",
+        data={"mode": "analog", "min_value": "0", "max_value": "nan"},
+        files={"file": ("gauge.png", b"fake image", "image/png")},
+    )
+    assert response.status_code == 400
+    assert "finite number" in response.json()["detail"]
+
+
+def test_analyze_rejects_out_of_range_calibration_angle():
+    response = client.post(
+        "/api/analyze",
+        data={"mode": "analog", "start_angle": "360", "end_angle": "45"},
+        files={"file": ("gauge.png", b"fake image", "image/png")},
+    )
+    assert response.status_code == 400
+    assert "between 0 and 359" in response.json()["detail"]
+
+
+def test_create_job_rejects_non_finite_threshold():
+    response = client.post(
+        "/api/jobs",
+        data={"warning_limit": "75", "danger_limit": "inf"},
+        files={"file": ("gauge.png", b"image-bytes", "image/png")},
+    )
+    assert response.status_code == 400
+    assert "finite number" in response.json()["detail"]
+
+
+def test_create_job_rejects_oversized_metadata():
+    response = client.post(
+        "/api/jobs",
+        data={"machine_name": "x" * 81},
+        files={"file": ("gauge.png", b"image-bytes", "image/png")},
+    )
+    assert response.status_code == 400
+    assert "80 characters" in response.json()["detail"]
