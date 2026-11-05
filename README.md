@@ -5,7 +5,8 @@ AI-assisted digitization and monitoring for legacy industrial instruments.
 ## Current prototype
 - Responsive dashboard with telemetry chart, alerts, history and CSV export
 - FastAPI backend
-- Experimental OpenCV analog-gauge baseline: circle detection + pointer-line estimation
+- Experimental OpenCV analog-gauge baseline: circle detection + radial pointer segmentation
+- Experimental digital-display OCR using OpenCV preprocessing + Tesseract
 - Threshold-based NORMAL / WARNING / DANGER classification
 - Ground-truth evaluation utility for repeatable gauge-image testing
 
@@ -51,14 +52,28 @@ The report includes per-image estimates and MAE, RMSE and MAPE. MAPE excludes ze
 
 Three user-supplied gauge photos were previously used for an initial smoke check. Those outputs were not independently verified; therefore no real-world MAE, MAPE or success rate is claimed. The sample photos are not stored in this repository.
 
-Digital-display OCR and video processing are not implemented yet.
+## Digital display OCR
+The dashboard's **Digital display** mode calls `POST /api/analyze` with `mode=digital`. The backend uses OpenCV grayscale/CLAHE/upscaling/Otsu preprocessing followed by Tesseract OCR, restricted to numeric characters and decimal/sign symbols. The API returns the selected numeric token, raw recognized token, Tesseract token confidence (0–100), and a warning to verify the reading.
+
+Python dependency installation:
+```bash
+pip install -r requirements.txt
+```
+Tesseract is a separate system executable and must also be installed:
+- Windows: install the Tesseract OCR Windows package and add its installation directory to PATH.
+- Ubuntu/Debian: `sudo apt-get install tesseract-ocr`
+- macOS with Homebrew: `brew install tesseract`
+
+Restart the FastAPI server after installing Tesseract. If the executable is missing, digital mode returns a clear HTTP 422 error; analog mode remains available. OCR can misread seven-segment digits, decimal points, reflections, units and multi-field displays. It currently selects the highest-confidence numeric token; it does not yet support region-of-interest selection, unit recognition, multi-value displays or temporal stabilization. Tesseract confidence is text-recognition confidence, not measurement accuracy. Verify every reading manually.
+
+Video processing is not implemented yet.
 
 ## Tests
 Run from the `backend` directory:
 ```bash
 pytest -q
 ```
-Tests cover angle-to-value mapping, invalid calibration, central dial-circle selection, synthetic long-needle versus short-counterweight detection, blank-dial rejection and evaluation metric calculations. They do not establish real-world reading accuracy.
+Tests cover angle-to-value mapping, invalid calibration, central dial-circle selection, synthetic long-needle versus short-counterweight detection, blank-dial rejection, evaluation metrics and digital OCR parsing/error handling (with Tesseract mocked). They do not establish real-world reading accuracy.
 
 ## API
 - `GET /api/health`
