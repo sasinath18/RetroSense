@@ -1,0 +1,2 @@
+image,min_value,max_value,expected_value,unit,start_angle,end_angle
+sample-gauge-01.jpg,0,100,,PSI,135,45
