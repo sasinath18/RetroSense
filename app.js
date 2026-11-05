@@ -57,10 +57,27 @@ function chartRowsFor(row){
   return history.filter(item=>item.name===row.name&&item.unit===row.unit&&(item.mode||"analog")===(row.mode||"analog")).slice(0,20).reverse();
 }
 function status(v,c){return v>=c.danger?"DANGER":v>=c.warning?"WARNING":"NORMAL"}
+function resetGauge(){
+  const panel=$(".gauge-panel"),arc=$("#gaugeArc"),needle=$("#needle"),state=$("#gaugeReadState");
+  panel.classList.remove("has-reading");
+  arc.style.strokeDashoffset=383.3;
+  arc.style.opacity="0";
+  arc.style.filter="none";
+  needle.style.opacity="0";
+  needle.style.filter="none";
+  state.textContent="WAITING";
+}
 function updateGauge(value,c){
   const pct=Math.max(0,Math.min(1,(value-c.min)/(c.max-c.min)));
-  $("#needle").setAttribute("transform",`rotate(${-90+pct*180} 160 160)`);
-  $("#gaugeArc").style.strokeDashoffset=383.3*(1-pct);
+  const panel=$(".gauge-panel"),arc=$("#gaugeArc"),needle=$("#needle"),state=$("#gaugeReadState");
+  panel.classList.add("has-reading");
+  needle.setAttribute("transform",`rotate(${-90+pct*180} 160 160)`);
+  needle.style.opacity="1";
+  needle.style.filter="drop-shadow(0 0 3px rgba(233,242,247,.35))";
+  arc.style.strokeDashoffset=383.3*(1-pct);
+  arc.style.opacity="1";
+  arc.style.filter="drop-shadow(0 0 5px currentColor)";
+  state.textContent="READING";
   $("#minLabel").textContent=c.min;
   $("#maxLabel").textContent=c.max;
 }
@@ -473,4 +490,4 @@ async function checkApiConnection(){
     console.warn("RetroSense API health check failed:",err);
   }
 }
-initChart();initGaugeTicks();updateModeFields();$("#latestStat").textContent="—";$("#gaugeValue").textContent="—";$("#alertStat").textContent="WAITING";$("#alertStat").style.color="var(--muted)";$("#readingTime").textContent="No image analyzed yet";$("#updatedLabel").textContent="—";restoreDashboardState();checkApiConnection();
+initChart();initGaugeTicks();resetGauge();updateModeFields();$("#latestStat").textContent="—";$("#gaugeValue").textContent="—";$("#alertStat").textContent="WAITING";$("#alertStat").style.color="var(--muted)";$("#readingTime").textContent="No image analyzed yet";$("#updatedLabel").textContent="—";restoreDashboardState();checkApiConnection();
