@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pytest
 from vision import (
     angle_to_value, GaugeReadError, _select_gauge_circle,
-    _detect_pointer_angle, _detect_pointer_angle_hough,
+    _detect_pointer_angle, _detect_pointer_angle_hough, read_analog_gauge,
 )
 from evaluate_samples import calculate_metrics
 
