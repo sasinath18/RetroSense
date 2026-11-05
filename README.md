@@ -2,20 +2,13 @@
 
 AI-assisted digitization and monitoring for legacy industrial instruments.
 
-RetroSense turns images or video frames of analog gauges and digital displays into structured readings, plots trends, and raises threshold-based alerts. This repository currently includes a responsive web dashboard and a FastAPI starter backend.
+## Current prototype
+- Responsive dashboard with telemetry chart, alerts, history and CSV export
+- FastAPI backend
+- Experimental OpenCV analog-gauge baseline: circle detection + pointer-line estimation
+- Threshold-based NORMAL / WARNING / DANGER classification
 
-## Features
-- Upload a gauge/display image or video
-- Configure instrument type, units, calibration range and alert thresholds
-- Live telemetry dashboard with trend chart and event log
-- CSV export of readings
-- REST API health check and WebSocket-ready job updates
-- Synthetic demo mode for testing the interface without hardware
-
-## Run the dashboard
-Open `index.html` in a modern browser. For local API integration, start the backend below and serve the frontend from a local web server.
-
-## Run the API
+## Run locally
 ```bash
 cd backend
 python -m venv .venv
@@ -24,20 +17,24 @@ python -m venv .venv
 pip install -r requirements.txt
 uvicorn main:app --reload
 ```
+Open `http://127.0.0.1:8000/docs` to test the API. Open `index.html` using a local static server (for example `python -m http.server 5500` from the repository root).
 
-API runs at http://127.0.0.1:8000. Interactive docs: http://127.0.0.1:8000/docs.
+## Analog image analysis
+`POST /api/analyze` accepts multipart fields:
+- `file`: JPG, PNG, WEBP or BMP (max 12 MB)
+- `mode=analog`
+- `min_value`, `max_value`
+- `start_angle`, `end_angle` in image coordinates (degrees; defaults 135° to 45°)
 
-## API contract
+The first implementation uses Hough circle and line detection. It is an experimental baseline and may fail on glare, perspective distortion, thick pointers, occlusion, unusual dial geometry or cluttered backgrounds. It does not yet implement digital-display OCR or video processing. Validate readings against known gauge values and calibrate angles for each instrument.
+
+## API
 - `GET /api/health`
-- `POST /api/jobs` — multipart upload: `file`, `machine_name`, `mode`, `unit`, `min_value`, `max_value`, `warning_limit`, `danger_limit`
+- `POST /api/analyze`
+- `POST /api/jobs`
 - `POST /api/jobs/{job_id}/start`
 - `GET /api/jobs/{job_id}/export.csv`
 - `WS /ws/jobs/{job_id}`
 
-The starter backend stores uploaded files locally and returns a simulated reading stream. Replace the demo extraction function in `backend/main.py` with a calibrated computer-vision model before using real instruments.
-
-## Project status
-Prototype / academic portfolio project. Not certified for safety-critical industrial control. Always verify readings with a calibrated instrument and keep human supervision for alarms.
-
-## License
-MIT
+## Safety
+Academic prototype only. Not certified for safety-critical monitoring or control. Never use its output as the sole basis for industrial decisions.
