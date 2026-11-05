@@ -11,3 +11,5 @@ services:
     envVars:
       - key: CORS_ORIGINS
         value: "https://sasinath18.github.io"
+      - key: RETROSENSE_API_TOKEN
+        sync: false
