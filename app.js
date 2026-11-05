@@ -90,7 +90,7 @@ async function syncServerHistory(){
   if(!api)return;
   try{
     const response=await fetch(api+"/api/readings",{headers:apiHeaders(),signal:AbortSignal.timeout(isLocalHost?5000:90000)});
-    if(response.status===401){$("#apiStatus").textContent="TOKEN REQUIRED";return}
+    if(response.status===401){setApiState("TOKEN REQUIRED");return}
     if(!response.ok)throw Error("Reading history request failed ("+response.status+")");
     const payload=await response.json();
     const remote=(payload.readings||[]).map(item=>({
@@ -109,7 +109,7 @@ async function syncServerHistory(){
     alerts=[...remote.filter(item=>item.status!=="NORMAL"&&!alertKeys.has(item.job_id)),...alerts].slice(0,100);
     persistDashboardState();
     restoreDashboardState();
-    $("#apiStatus").textContent="ONLINE";
+    setApiState("ONLINE");
   }catch(err){console.warn("Could not sync server history:",err)}
 }
 function restoreDashboardState(){
@@ -126,11 +126,11 @@ function restoreDashboardState(){
   $("#gaugeValue").textContent=value.toFixed(1);$("#gaugeUnit").textContent=latest.unit||c.unit;
   $("#readingTime").textContent="Restored from this browser · "+latest.displayTime;
   $("#updatedLabel").textContent=latest.displayTime;$("#instrumentStat").textContent="01";
-  $("#modeStat").textContent=mode.toUpperCase();$("#alertStat").textContent=s||"UNKNOWN";
+  $("#instrumentStat").textContent=String(new Set(history.map(item=>item.name)).size).padStart(2,"0");$("#modeStat").textContent=(latest.mode||mode).toUpperCase();$("#alertStat").textContent=s||"UNKNOWN";
   $("#alertStat").style.color=s==="DANGER"?"var(--red)":s==="WARNING"?"var(--amber)":"var(--green)";
-  const pct=Math.max(0,Math.min(1,(value-c.min)/(c.max-c.min||1)));
-  $("#needle").setAttribute("transform",`rotate(${-90+pct*180} 160 160)`);
-  $("#gaugeArc").style.strokeDashoffset=383.3*(1-pct);
+  const scale={min:Number.isFinite(latest.min)?latest.min:c.min,max:Number.isFinite(latest.max)?latest.max:c.max};
+  updateGauge(value,scale);
+  $("#gaugeArc").style.stroke=$("#alertStat").style.color==="var(--red)"?"var(--red)":$("#alertStat").style.color==="var(--amber)"?"var(--amber)":"var(--cyan)";
   samples=history.slice(0,20).reverse().map(r=>({x:r.displayTime,y:Number(r.value)}));
   chart.data.labels=samples.map(x=>x.x);chart.data.datasets[0].data=samples.map(x=>x.y);chart.update("none");
 }
@@ -220,27 +220,32 @@ function setApiState(state){
   const el=$("#apiStatus"),pill=$("#systemState");
   if(el){el.textContent=state;el.dataset.state=state.toLowerCase().replaceAll(" ","-")}
   if(pill){
-    const label=state==="ONLINE"?"API CONNECTED":state==="CONNECTING"?"CONNECTING":state==="TOKEN REQUIRED"?"TOKEN REQUIRED":state==="NOT CONFIGURED"?"API NOT CONFIGURED":state==="OFFLINE"?"API OFFLINE":"SYSTEM";
+    const label=state==="ONLINE"?"API CONNECTED":state==="CONNECTING"?"CONNECTING":state==="TOKEN REQUIRED"?"TOKEN REQUIRED":state==="NOT CONFIGURED"?"API NOT CONFIGURED":state==="OFFLINE"?"API OFFLINE":state==="SLOW RESPONSE"?"API SLOW":"SYSTEM";
     pill.lastChild.textContent=label;
     pill.classList.toggle("is-offline",state==="OFFLINE"||state==="NOT CONFIGURED");
-    pill.classList.toggle("is-pending",state==="CONNECTING"||state==="TOKEN REQUIRED");
+    pill.classList.toggle("is-pending",state==="CONNECTING"||state==="TOKEN REQUIRED"||state==="SLOW RESPONSE");
   }
+}
+function clearSelectedFile(){
+  selectedFile=null;$("#fileName").textContent="No file selected";
+  const preview=$("#selectedPreview");preview.hidden=true;preview.removeAttribute("src");
+  if(previewUrl){URL.revokeObjectURL(previewUrl);previewUrl=null}
 }
 function showSelectedFile(file){
   const allowed=["image/jpeg","image/png","image/webp","image/bmp"];
-  if(!file){selectedFile=null;$("#fileName").textContent="No file selected";$("#selectedPreview").hidden=true;return false}
+  if(!file){clearSelectedFile();return false}
   if(!allowed.includes(file.type)){
-    alert("Unsupported file type. Choose a JPG, PNG, WEBP or BMP image.");
-    return false;
+    clearSelectedFile();$("#fileInput").value="";
+    alert("Unsupported file type. Choose a JPG, PNG, WEBP or BMP image.");return false;
   }
-  if(file.size>12*1024*1024){
-    alert("The image is larger than 12 MB. Choose a smaller image.");
-    return false;
+  if(file.size===0||file.size>12*1024*1024){
+    clearSelectedFile();$("#fileInput").value="";
+    alert(file.size===0?"The selected image is empty.":"The image is larger than 12 MB. Choose a smaller image.");return false;
   }
-  selectedFile=file;$("#fileName").textContent=file.name||"Selected image";
+  selectedFile=file;$("#fileName").textContent=(file.name||"Selected image")+" · "+(file.size/1024/1024).toFixed(2)+" MB";
   if(previewUrl)URL.revokeObjectURL(previewUrl);
   previewUrl=URL.createObjectURL(file);
-  $("#selectedPreview").src=previewUrl;$("#selectedPreview").hidden=false;
+  const preview=$("#selectedPreview");preview.src=previewUrl;preview.hidden=false;
   return true;
 }
 document.querySelectorAll(".mode").forEach(button=>button.addEventListener("click",()=>{
@@ -264,7 +269,7 @@ document.querySelectorAll(".nav").forEach(link=>link.addEventListener("click",()
   document.querySelectorAll(".nav").forEach(item=>item.classList.remove("active"));
   link.classList.add("active");
 }));
-async function startCapture(){
+async function startCapture({silent=false}={}){
   if(isAnalyzing)return;
   let c;
   try{
@@ -272,9 +277,13 @@ async function startCapture(){
     if(c.max<=c.min)throw Error("Maximum value must be greater than minimum value.");
     if(c.warning<c.min||c.danger>c.max)throw Error("Warning and danger thresholds must be within the instrument range.");
     if(c.danger<c.warning)throw Error("Danger threshold must be greater than or equal to warning threshold.");
-  }catch(error){alert(error.message);return}
-  if(!selectedFile){alert("Choose an instrument image first.");return}
-  if(!api){setApiState("NOT CONFIGURED");alert("The FastAPI backend URL is not configured.");return}
+    if(mode==="analog"){
+      const start=numericInput("#startAngle","Start angle"),end=numericInput("#endAngle","End angle");
+      if(start<0||start>359||end<0||end>359||start===end)throw Error("Calibration angles must be different values between 0 and 359 degrees.");
+    }
+  }catch(error){if(!silent)alert(error.message);else $("#cameraStatus").textContent=error.message;return}
+  if(!selectedFile){if(!silent)alert("Choose an instrument image first.");return}
+  if(!api){setApiState("NOT CONFIGURED");if(!silent)alert("The FastAPI backend URL is not configured.");return}
   if(isAnalyzing)return;
   const btn=$("#analyzeBtn");isAnalyzing=true;btn.disabled=true;
   $("#cameraCapture").disabled=true;btn.textContent="Analyzing image…";
@@ -286,7 +295,10 @@ async function startCapture(){
     const fd=new FormData();
     fd.append("file",selectedFile);fd.append("mode",mode);fd.append("machine_name",c.name);fd.append("unit",c.unit);
     fd.append("min_value",c.min);fd.append("max_value",c.max);fd.append("warning_limit",c.warning);fd.append("danger_limit",c.danger);
-    fd.append("start_angle",numericInput("#startAngle","Start angle"));fd.append("end_angle",numericInput("#endAngle","End angle"));
+    if(mode==="analog"){
+      fd.append("start_angle",numericInput("#startAngle","Start angle"));
+      fd.append("end_angle",numericInput("#endAngle","End angle"));
+    }
     const createdResponse=await authorizedFetch(api+"/api/jobs",{method:"POST",body:fd,signal:timeout},true);
     const created=await createdResponse.json().catch(()=>({detail:"Backend returned an unreadable response."}));
     if(!createdResponse.ok){
@@ -309,8 +321,9 @@ async function startCapture(){
       displayTime:new Date(reading.timestamp).toLocaleTimeString()
     });
     $("#readingTime").textContent=(mode==="digital"?"OCR estimate · ":"CV estimate · ")+now();
+    setApiState("ONLINE");
     await syncServerHistory();
-    $("#cameraStatus").textContent=$("#cameraPanel").hidden?"Camera is off.":"Frame analyzed. Capture another frame or close the camera.";
+    $("#cameraStatus").textContent=$("#cameraPanel").hidden?"Camera is off.":"Frame analyzed: "+reading.value+" "+reading.unit+".";
     const message=mode==="digital"
       ?"OCR reading: "+reading.value+" "+reading.unit+"\nRecognized text: "+(analysis.raw_text||"")+
        "\nOCR score: "+(analysis.confidence??"not available")+" (not measurement accuracy)."+
@@ -318,21 +331,23 @@ async function startCapture(){
        "\nVerify the displayed value manually."
       :"Estimated reading: "+reading.value+" "+reading.unit+"\nPointer angle: "+
        (analysis.pointer_angle_deg??"not available")+"°\nConfidence: "+(analysis.confidence||"unknown")+". Verify manually.";
-    alert(message);
+    if(!silent)alert(message);
   }catch(error){
     const isAuth=/token|unauthorized|401/i.test(error.message);
     if(isAuth)setApiState("TOKEN REQUIRED");
     else if(error.name==="AbortError"||error.name==="TimeoutError")setApiState("SLOW RESPONSE");
     else if(/fetch|network|health check|backend/i.test(error.message))setApiState("OFFLINE");
-    alert("Could not analyze this image.\n"+error.message+"\n\nCheck the API connection, access token, image and calibration.");
+    $("#cameraStatus").textContent=error.message;
+    if(!silent)alert("Could not analyze this image.\n"+error.message+"\n\nCheck the API connection, access token, image and calibration.");
   }finally{
     isAnalyzing=false;btn.disabled=false;$("#cameraCapture").disabled=!cameraStream;
     btn.innerHTML='Analyze instrument <span>→</span>';
   }
 }
 function runDemo(){const c=config();let n=0;const timer=setInterval(()=>{const v=Math.max(c.min,Math.min(c.max,c.min+(c.max-c.min)*(.56+.12*Math.sin(n/3)+.025*(Math.random()-.5))));addReading(v);n++;if(n>=20)clearInterval(timer)},850)}
-function connectSocket(id){const ws=new WebSocket(api.replace("http","ws")+`/ws/jobs/${id}`);ws.onmessage=e=>{const d=JSON.parse(e.data);if(typeof d.value==="number")addReading(d.value)};ws.onclose=()=>$("#apiStatus").textContent="ONLINE"}
+function connectSocket(id){const ws=new WebSocket(api.replace(/^http/,"ws")+`/ws/jobs/${id}`);ws.onmessage=e=>{const d=JSON.parse(e.data);if(typeof d.value==="number")addReading(d.value)};ws.onclose=()=>setApiState("ONLINE");return ws}
 async function openCamera(){
+  if(cameraStream)return;
   const panel=$("#cameraPanel"),video=$("#cameraVideo"),start=$("#cameraStart"),capture=$("#cameraCapture"),stop=$("#cameraStop"),status=$("#cameraStatus");
   if(!navigator.mediaDevices?.getUserMedia){status.textContent="Camera access is unavailable. Use HTTPS or localhost, or upload an image.";panel.hidden=false;return}
   try{
@@ -353,7 +368,7 @@ function closeCamera(){
   $("#cameraStart").disabled=false;$("#cameraCapture").disabled=true;$("#cameraStop").disabled=true;
   $("#cameraStatus").textContent="Camera is off.";
 }
-async function captureCameraFrame(){
+async function captureCameraFrame({automatic=false}={}){
   const video=$("#cameraVideo"),canvas=$("#cameraCanvas");
   if(!cameraStream||!video.videoWidth||!video.videoHeight){$("#cameraStatus").textContent="Camera is not ready yet.";return}
   canvas.width=video.videoWidth;canvas.height=video.videoHeight;
@@ -363,7 +378,7 @@ async function captureCameraFrame(){
   selectedFile=new File([blob],"retrosense-camera-"+Date.now()+".jpg",{type:"image/jpeg"});
   $("#fileName").textContent=selectedFile.name+" · camera frame";
   $("#cameraStatus").textContent="Frame captured. Sending image for analysis…";
-  await startCapture();
+  await startCapture({silent:automatic});
 }
 async function startAutoCapture(){
   if(isAnalyzing)return;
@@ -373,10 +388,10 @@ async function startAutoCapture(){
   autoCaptureRequested=true;
   $("#cameraAutoStart").disabled=true;$("#cameraAutoStop").disabled=false;
   $("#cameraStatus").textContent="Automatic capture enabled: one still frame every five seconds.";
-  await captureCameraFrame();
+  await captureCameraFrame({automatic:true});
   if(!autoCaptureRequested||!cameraStream){stopAutoCapture();return}
   cameraTimer=setInterval(()=>{
-    if(autoCaptureRequested&&cameraStream&&!isAnalyzing)captureCameraFrame();
+    if(autoCaptureRequested&&cameraStream&&!isAnalyzing)captureCameraFrame({automatic:true});
   },5000);
 }
 $("#cameraStart").addEventListener("click",openCamera);
@@ -385,22 +400,21 @@ $("#cameraAutoStart").addEventListener("click",startAutoCapture);
 $("#cameraAutoStop").addEventListener("click",stopAutoCapture);
 $("#cameraStop").addEventListener("click",closeCamera);
 window.addEventListener("pagehide",closeCamera);
-$("#analyzeBtn").addEventListener("click",startCapture);
+$("#analyzeBtn").addEventListener("click",()=>startCapture());
 $("#exportBtn").addEventListener("click",()=>{if(!history.length){alert("No readings available to export.");return}const rows=[["timestamp","instrument","reading","unit","status"],...history.map(r=>[r.time,r.name,r.value,r.unit,r.status])];const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(",")).join("\n");const url=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));const a=document.createElement("a");a.href=url;a.download="retrosense-readings.csv";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)});
 async function checkApiConnection(){
   if(!api){$("#apiStatus").textContent="NOT CONFIGURED";return}
-  $("#apiStatus").textContent="CONNECTING";
+  setApiState("CONNECTING");
   try{
     const response=await fetch(api+"/api/health",{signal:AbortSignal.timeout(isLocalHost?5000:90000)});
     if(!response.ok)throw Error("Health check failed ("+response.status+")");
     const payload=await response.json();
     if(payload.status!=="ok")throw Error("Unexpected API health response");
-    $("#apiStatus").textContent="ONLINE";
+    setApiState("ONLINE");
     if(apiToken)await syncServerHistory();
   }catch(err){
-    $("#apiStatus").textContent="OFFLINE";
+    setApiState("OFFLINE");
     console.warn("RetroSense API health check failed:",err);
   }
 }
 initChart();initGaugeTicks();$("#latestStat").textContent="—";$("#gaugeValue").textContent="—";$("#alertStat").textContent="WAITING";$("#alertStat").style.color="var(--muted)";$("#readingTime").textContent="No image analyzed yet";$("#updatedLabel").textContent="—";restoreDashboardState();checkApiConnection();
-checkApiConnection();
