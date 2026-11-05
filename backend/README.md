@@ -51,7 +51,9 @@ Check installation with `tesseract --version`.
 
 ## Deployment
 
-The repository root contains `render.yaml` for the Render web service. Configure `CORS_ORIGINS` to the exact deployed dashboard origin once GitHub Pages is enabled.
+The repository root contains `render.yaml`. It defines a Free Docker web service in Singapore and uses `backend/Dockerfile`. The Docker image installs the Tesseract executable and OpenCV runtime libraries, then installs the Python dependencies from `requirements.txt`. This avoids deploying the `pytesseract` Python wrapper without its required system executable.
+
+The Blueprint sets `CORS_ORIGINS=https://sasinath18.github.io`. Update this value if the dashboard is moved to a different origin.
 
 ## Prototype limitations
 
