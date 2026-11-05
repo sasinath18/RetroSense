@@ -1,5 +1,5 @@
 const $=s=>document.querySelector(s);let mode="analog",selectedFile=null,jobId=null,history=[],alerts=[],samples=[],chart;
-const api="http://127.0.0.1:8000";
+const api=(window.RETROSENSE_API_URL||((location.protocol==="http:"||location.protocol==="https:")?location.origin:"http://127.0.0.1:8000")).replace(/\\/$/,"");
 const now=()=>new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
 function config(){return{min:Number($("#minValue").value)||0,max:Number($("#maxValue").value)||100,warning:Number($("#warningLimit").value)||75,danger:Number($("#dangerLimit").value)||90,unit:$("#unit").value,name:$("#machineName").value||"Instrument"}}
 function status(v,c){return v>=c.danger?"DANGER":v>=c.warning?"WARNING":"NORMAL"}
@@ -19,4 +19,4 @@ function runDemo(){const c=config();let n=0;const timer=setInterval(()=>{const v
 function connectSocket(id){const ws=new WebSocket(api.replace("http","ws")+`/ws/jobs/${id}`);ws.onmessage=e=>{const d=JSON.parse(e.data);if(typeof d.value==="number")addReading(d.value)};ws.onclose=()=>$("#apiStatus").textContent="ONLINE"}
 $("#analyzeBtn").addEventListener("click",startCapture);
 $("#exportBtn").addEventListener("click",()=>{if(!history.length){alert("No readings available to export.");return}const rows=[["timestamp","instrument","reading","unit","status"],...history.map(r=>[r.time,r.name,r.value,r.unit,r.status])];const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="retrosense-readings.csv";a.click();URL.revokeObjectURL(a.href)});
-initChart();addReading(64.2);setInterval(()=>{if(!jobId&&history.length&&history.length<25){const c=config(),last=history[0].value;addReading(Math.max(c.min,Math.min(c.max,last+(Math.random()-.48)*2.5)))}},4000);
+initChart();$("#latestStat").textContent="—";$("#gaugeValue").textContent="—";$("#alertStat").textContent="WAITING";$("#alertStat").style.color="var(--muted)";$("#readingTime").textContent="No image analyzed yet";$("#updatedLabel").textContent="—";
