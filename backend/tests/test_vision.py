@@ -85,3 +85,32 @@ def test_accuracy_metrics_handle_no_ground_truth():
     assert calculate_metrics([]) == {
         "count": 0, "mae": None, "rmse": None, "mape_percent": None
     }
+
+
+def test_digital_ocr_reports_missing_tesseract(monkeypatch):
+    import digital_ocr
+    image = np.full((80, 180, 3), 255, dtype=np.uint8)
+    ok, encoded = cv2.imencode(".png", image)
+    assert ok
+    monkeypatch.setattr(digital_ocr, "pytesseract", None)
+    with pytest.raises(digital_ocr.DigitalReadError, match="dependency is missing"):
+        digital_ocr.read_digital_display(encoded.tobytes())
+
+
+def test_digital_ocr_extracts_numeric_token_and_confidence(monkeypatch):
+    import digital_ocr
+    class FakeOutput:
+        DICT = "dict"
+    class FakeTesseract:
+        @staticmethod
+        def image_to_data(image, config, output_type):
+            return {"text": ["TEMP", "72.5", "C"], "conf": ["-1", "91.2", "-1"]}
+    image = np.full((80, 180, 3), 255, dtype=np.uint8)
+    ok, encoded = cv2.imencode(".png", image)
+    assert ok
+    monkeypatch.setattr(digital_ocr, "pytesseract", FakeTesseract)
+    monkeypatch.setattr(digital_ocr, "Output", FakeOutput)
+    result = digital_ocr.read_digital_display(encoded.tobytes())
+    assert result["value"] == 72.5
+    assert result["raw_text"] == "72.5"
+    assert result["confidence"] == 91.2
