@@ -27,8 +27,8 @@ const now=()=>new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",
 function config(){return{min:Number($("#minValue").value)||0,max:Number($("#maxValue").value)||100,warning:Number($("#warningLimit").value)||75,danger:Number($("#dangerLimit").value)||90,unit:$("#unit").value,name:$("#machineName").value||"Instrument"}}
 function status(v,c){return v>=c.danger?"DANGER":v>=c.warning?"WARNING":"NORMAL"}
 function addReading(v,details={}){const c=config(),s=details.status||status(v,c),t=details.displayTime||now();$("#latestStat").textContent=v.toFixed(1);$("#unitStat").textContent=details.unit||c.unit;$("#gaugeValue").textContent=v.toFixed(1);$("#gaugeUnit").textContent=details.unit||c.unit;$("#updatedLabel").textContent=t;$("#readingTime").textContent="Updated at "+t;$("#instrumentStat").textContent="01";$("#modeStat").textContent=(details.mode||mode).toUpperCase();$("#alertStat").textContent=s;$("#alertStat").className=s==="NORMAL"?"status-normal":"";$("#alertStat").style.color=s==="DANGER"?"var(--red)":s==="WARNING"?"var(--amber)":"var(--green)";$("#minLabel").textContent=c.min;$("#maxLabel").textContent=c.max;const pct=Math.max(0,Math.min(1,(v-c.min)/(c.max-c.min||1)));$("#needle").style.transform=`rotate(${-135+pct*270}deg)`;$("#gaugeArc").style.strokeDashoffset=383.3*(1-pct);$("#gaugeArc").style.stroke=s==="DANGER"?"var(--red)":s==="WARNING"?"var(--amber)":"var(--cyan)";const row={time:details.timestamp||new Date().toISOString(),displayTime:t,name:details.instrument||c.name,value:v,unit:details.unit||c.unit,status:s,mode:details.mode||mode,job_id:details.job_id||null};history=history.filter(item=>!row.job_id||item.job_id!==row.job_id);history.unshift(row);history=history.slice(0,100);renderHistory();samples.push({x:t,y:v});samples=samples.slice(-20);chart.data.labels=samples.map(x=>x.x);chart.data.datasets[0].data=samples.map(x=>x.y);chart.update("none");if(s!=="NORMAL"&&(!alerts.length||alerts[0].status!==s)){alerts.unshift(row);renderAlerts()}persistDashboardState()}
-function renderHistory(){$("#historyBody").innerHTML=history.length?history.slice(0,12).map(r=>`<tr><td>${r.displayTime}</td><td>${escapeHtml(r.name)}</td><td>${r.value.toFixed(1)}</td><td>${r.unit}</td><td><span class="pill-status ${r.status.toLowerCase()}">${r.status}</span></td></tr>`).join(""):'<tr><td colspan="5" class="empty">No readings yet.</td></tr>'}
-function renderAlerts(){$("#alertCount").textContent=alerts.length+" EVENTS";$("#alerts").innerHTML=alerts.length?alerts.slice(0,8).map(a=>`<div class="alert-row ${a.status.toLowerCase()}"><i class="alert-dot"></i><div><b>${a.status}: ${a.value.toFixed(1)} ${a.unit}</b><small>${a.displayTime} · ${escapeHtml(a.name)}</small></div></div>`).join(""):'<div class="empty">No alerts detected. System is monitoring.</div>'}
+function renderHistory(){$("#historyBody").innerHTML=history.length?history.slice(0,12).map(r=>{const s=["NORMAL","WARNING","DANGER"].includes(r.status)?r.status:"UNKNOWN";return `<tr><td>${escapeHtml(r.displayTime)}</td><td>${escapeHtml(r.name)}</td><td>${Number(r.value).toFixed(1)}</td><td>${escapeHtml(r.unit||"")}</td><td><span class="pill-status ${s.toLowerCase()}">${s}</span></td></tr>`}).join(""):'<tr><td colspan="5" class="empty">No readings yet.</td></tr>'}
+function renderAlerts(){$("#alertCount").textContent=alerts.length+" EVENTS";$("#alerts").innerHTML=alerts.length?alerts.slice(0,8).map(a=>{const s=["NORMAL","WARNING","DANGER"].includes(a.status)?a.status:"UNKNOWN";return `<div class="alert-row ${s.toLowerCase()}"><i class="alert-dot"></i><div><b>${s}: ${Number(a.value).toFixed(1)} ${escapeHtml(a.unit||"")}</b><small>${escapeHtml(a.displayTime)} · ${escapeHtml(a.name)}</small></div></div>`}).join(""):'<div class="empty">No alerts detected. System is monitoring.</div>'}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 
 const STORAGE_KEY="retrosense.dashboard.v1";
@@ -65,8 +65,8 @@ function restoreDashboardState(){
   try{
     const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
     const valid=row=>row&&Number.isFinite(Number(row.value))&&typeof row.displayTime==="string"&&typeof row.name==="string";
-    history=Array.isArray(saved.history)?saved.history.filter(valid).slice(0,100):[];
-    alerts=Array.isArray(saved.alerts)?saved.alerts.filter(valid).slice(0,100):[];
+    history=Array.isArray(saved.history)?saved.history.filter(valid).map(row=>({...row,value:Number(row.value)})).slice(0,100):[];
+    alerts=Array.isArray(saved.alerts)?saved.alerts.filter(valid).map(row=>({...row,value:Number(row.value)})).slice(0,100):[];
   }catch(err){history=[];alerts=[];console.warn("RetroSense local history could not be read:",err)}
   renderHistory();renderAlerts();
   if(!history.length)return;
@@ -96,7 +96,7 @@ async function startCapture(){
   if(!selectedFile){alert("Choose an instrument image first.");return}
   if(!api){$("#apiStatus").textContent="NOT CONFIGURED";alert("RetroSense API is not configured for this deployed dashboard. Deploy the FastAPI backend to Render, then set window.RETROSENSE_API_URL in index.html to the Render service URL.");return}
   if(selectedFile.type.startsWith("video/")){alert("Video processing is not implemented yet. Capture a still frame or upload an image.");return}
-  const btn=$("#analyzeBtn");btn.disabled=true;btn.textContent="Analyzing image…";
+  const btn=$("#analyzeBtn");btn.disabled=true;$("#cameraCapture").disabled=true;btn.textContent="Analyzing image…";
   try{
     const health=await fetch(api+"/api/health",{signal:AbortSignal.timeout(isLocalHost?5000:90000)});
     if(!health.ok)throw Error("API unavailable");
@@ -120,6 +120,7 @@ async function startCapture(){
       displayTime:new Date(reading.timestamp).toLocaleTimeString()
     });
     $("#readingTime").textContent=(mode==="digital"?"OCR estimate · ":"CV estimate · ")+now();
+    await syncServerHistory();
     $("#cameraStatus").textContent=$("#cameraPanel").hidden?"Camera is off.":"Frame analyzed. Capture another frame or close the camera.";
     alert(mode==="digital"?
       "OCR reading: "+reading.value+" "+reading.unit+"\nRecognized text: "+(analysis.raw_text||"")+
@@ -129,7 +130,7 @@ async function startCapture(){
   }catch(err){
     $("#apiStatus").textContent="OFFLINE";
     alert("Could not analyze this image.\n"+err.message+"\n\nCheck that the FastAPI backend is running and the image/calibration is suitable.");
-  }finally{btn.disabled=false;btn.innerHTML='Analyze instrument <span>→</span>'}
+  }finally{btn.disabled=false;$("#cameraCapture").disabled=!cameraStream;btn.innerHTML='Analyze instrument <span>→</span>'}
 }
 function runDemo(){const c=config();let n=0;const timer=setInterval(()=>{const v=Math.max(c.min,Math.min(c.max,c.min+(c.max-c.min)*(.56+.12*Math.sin(n/3)+.025*(Math.random()-.5))));addReading(v);n++;if(n>=20)clearInterval(timer)},850)}
 function connectSocket(id){const ws=new WebSocket(api.replace("http","ws")+`/ws/jobs/${id}`);ws.onmessage=e=>{const d=JSON.parse(e.data);if(typeof d.value==="number")addReading(d.value)};ws.onclose=()=>$("#apiStatus").textContent="ONLINE"}
