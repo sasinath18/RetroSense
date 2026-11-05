@@ -29,7 +29,9 @@ def read_analog_gauge(image_bytes, min_value, max_value, start_angle=135.0, end_
     if image is None:
         raise GaugeReadError("Could not decode image. Upload a valid JPG or PNG.")
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    gray = cv2.GaussianBlur(gray, (9, 9), 1.5)
+    # Improve local contrast before edge detection; keep a light blur to suppress sensor noise.
+    gray = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+    gray = cv2.GaussianBlur(gray, (5, 5), 1.2)
     h, w = gray.shape
     circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, dp=1.2,
         minDist=max(30, min(h, w)//3), param1=120, param2=38,
@@ -42,6 +44,9 @@ def read_analog_gauge(image_bytes, min_value, max_value, start_angle=135.0, end_
         minLineLength=max(20,int(radius*.28)), maxLineGap=max(8,int(radius*.08)))
     if lines is None:
         raise GaugeReadError("No pointer-like line detected in the dial.")
+    sweep = _wrap_delta(end_angle, start_angle)
+    if sweep < 1 or sweep > 359:
+        raise GaugeReadError("Invalid calibration angles.")
     candidates=[]
     for x1,y1,x2,y2 in lines[:,0,:]:
         d1=math.hypot(x1-cx,y1-cy); d2=math.hypot(x2-cx,y2-cy)
@@ -49,13 +54,24 @@ def read_analog_gauge(image_bytes, min_value, max_value, start_angle=135.0, end_
         near,far=min(d1,d2),max(d1,d2)
         if near>radius*.23 or far<radius*.35 or far>radius*1.08: continue
         angle=math.degrees(math.atan2(fy-cy,fx-cx))%360
-        candidates.append((far-near-near*.3,angle,far))
+        # Ignore line segments outside the calibrated scale arc.
+        if _wrap_delta(angle, start_angle) > sweep:
+            continue
+        # Favor long, centre-originating segments over short tick marks.
+        score=(far-near) - near*0.8
+        candidates.append((score,angle,far,near))
     if not candidates:
         raise GaugeReadError("Could not isolate a pointer from dial markings. Try a sharper image.")
-    _,pointer_angle,pointer_length=max(candidates)
+    candidates.sort(reverse=True)
+    best_score,pointer_angle,pointer_length,near_distance=candidates[0]
     value = angle_to_value(pointer_angle, min_value, max_value, start_angle, end_angle)
+    # Heuristic only: this is not a statistically calibrated confidence probability.
+    score_gap = best_score - candidates[1][0] if len(candidates) > 1 else best_score
+    confidence = "low" if near_distance > radius*.12 or score_gap < radius*.08 else "experimental"
     return {"value":round(value,2),
         "pointer_angle_deg":round(pointer_angle,2),
         "dial":{"center_x":round(cx,1),"center_y":round(cy,1),"radius":round(radius,1)},
-        "confidence":"experimental",
-        "note":"Baseline Hough-line estimate. Verify against a calibrated reference."}
+        "confidence":confidence,
+        "diagnostics":{"candidate_lines":len(candidates),"pointer_length_px":round(pointer_length,1),
+                       "pointer_center_offset_px":round(near_distance,1)},
+        "note":"Heuristic Hough-line estimate; confidence is not a probability. Verify against a calibrated reference."}
