@@ -141,3 +141,26 @@ def test_create_job_rejects_oversized_metadata():
     )
     assert response.status_code == 400
     assert "80 characters" in response.json()["detail"]
+
+
+
+def test_configured_api_token_protects_reading_history(monkeypatch):
+    monkeypatch.setenv("RETROSENSE_API_TOKEN", "test-access-token")
+
+    unauthorized = client.get("/api/readings")
+    assert unauthorized.status_code == 401
+
+    authorized = client.get(
+        "/api/readings",
+        headers={"X-API-Token": "test-access-token"},
+    )
+    assert authorized.status_code == 200
+    assert "readings" in authorized.json()
+
+
+def test_health_endpoint_remains_public_when_api_token_is_enabled(monkeypatch):
+    monkeypatch.setenv("RETROSENSE_API_TOKEN", "test-access-token")
+
+    response = client.get("/api/health")
+
+    assert response.status_code == 200
