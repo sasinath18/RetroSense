@@ -5,6 +5,24 @@ const configuredApi=String(window.RETROSENSE_API_URL||"").trim();
 // Local development uses the local FastAPI server. A deployed dashboard must be
 // explicitly pointed at its Render API instead of incorrectly calling GitHub Pages.
 const api=(configuredApi||(isLocalHost?"http://127.0.0.1:8000":"")).replace(/\/$/,"");
+let apiToken="";
+try{apiToken=sessionStorage.getItem("retrosense-api-token")||""}catch(_){}
+function apiHeaders(){return apiToken?{"X-API-Token":apiToken}:{}}
+async function authorizedFetch(url,options={},promptForToken=false){
+  const headers=new Headers(options.headers||{});
+  if(apiToken)headers.set("X-API-Token",apiToken);
+  let response=await fetch(url,{...options,headers});
+  if(response.status===401&&promptForToken){
+    const entered=window.prompt("This RetroSense API is protected. Enter the API access token provided during Render deployment:");
+    if(entered&&entered.trim()){
+      apiToken=entered.trim();
+      try{sessionStorage.setItem("retrosense-api-token",apiToken)}catch(_){}
+      headers.set("X-API-Token",apiToken);
+      response=await fetch(url,{...options,headers});
+    }
+  }
+  return response;
+}
 const now=()=>new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
 function config(){return{min:Number($("#minValue").value)||0,max:Number($("#maxValue").value)||100,warning:Number($("#warningLimit").value)||75,danger:Number($("#dangerLimit").value)||90,unit:$("#unit").value,name:$("#machineName").value||"Instrument"}}
 function status(v,c){return v>=c.danger?"DANGER":v>=c.warning?"WARNING":"NORMAL"}
@@ -21,7 +39,7 @@ function persistDashboardState(){
 async function syncServerHistory(){
   if(!api)return;
   try{
-    const response=await fetch(api+"/api/readings",{signal:AbortSignal.timeout(isLocalHost?5000:90000)});
+    const response=await fetch(api+"/api/readings",{headers:apiHeaders(),signal:AbortSignal.timeout(isLocalHost?5000:90000)});
     if(!response.ok)return;
     const payload=await response.json();
     const remote=(payload.readings||[]).map(item=>({
@@ -87,11 +105,11 @@ async function startCapture(){
     fd.append("file",selectedFile);fd.append("mode",mode);fd.append("machine_name",c.name);fd.append("unit",c.unit);
     fd.append("min_value",c.min);fd.append("max_value",c.max);fd.append("warning_limit",c.warning);fd.append("danger_limit",c.danger);
     fd.append("start_angle",$("#startAngle").value);fd.append("end_angle",$("#endAngle").value);
-    const createdResponse=await fetch(api+"/api/jobs",{method:"POST",body:fd});
+    const createdResponse=await authorizedFetch(api+"/api/jobs",{method:"POST",body:fd},true);
     const created=await createdResponse.json();
     if(!createdResponse.ok)throw Error(created.detail||"Could not create analysis job");
     jobId=created.job_id;
-    const resultResponse=await fetch(api+`/api/jobs/${jobId}/start`,{method:"POST"});
+    const resultResponse=await authorizedFetch(api+`/api/jobs/${jobId}/start`,{method:"POST"},true);
     const result=await resultResponse.json();
     if(!resultResponse.ok)throw Error(result.detail||"Image analysis failed");
     const reading=result.reading;
