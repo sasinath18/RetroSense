@@ -58,37 +58,25 @@ def read_digital_display(image_bytes):
         ) from exc
 
     tokens = []
-    confidences = []
-    for text, confidence in zip(data["text"], data["conf"]):
+    for text, raw_confidence in zip(data["text"], data["conf"]):
         token = re.sub(r"[^0-9.+-]", "", text.strip())
         if not token:
             continue
         try:
             value = float(token)
-        except ValueError:
-            continue
-        tokens.append((token, value))
-        try:
-            score = float(confidence)
-            if score >= 0:
-                confidences.append(score)
+            score = float(raw_confidence)
         except (TypeError, ValueError):
-            pass
+            continue
+        tokens.append((token, value, score if score >= 0 else None))
 
     if not tokens:
         raise DigitalReadError(
             "No numeric display value detected. Crop the display tightly, reduce glare and ensure the digits are in focus."
         )
-    if len(tokens) > 1:
-        # Keep the most confident numeric token rather than concatenating unrelated labels.
-        best_index = max(
-            range(len(tokens)),
-            key=lambda i: confidences[i] if i < len(confidences) else -1
-        )
-    else:
-        best_index = 0
-    text, value = tokens[best_index]
-    confidence = confidences[best_index] if best_index < len(confidences) else None
+    # Select the numeric token with the highest reported OCR confidence.
+    text, value, confidence = max(
+        tokens, key=lambda item: item[2] if item[2] is not None else -1
+    )
     return {
         "value": value,
         "raw_text": text,
