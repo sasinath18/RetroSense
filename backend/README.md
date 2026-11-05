@@ -53,8 +53,8 @@ Check installation with `tesseract --version`.
 
 The repository includes two command-line evaluation tools:
 
-- Analog gauge: `python evaluate_samples.py samples/analog-manifest.csv --output analog-report.json`
-- Digital OCR: `python evaluate_digital_samples.py samples/digital-manifest.csv --output digital-report.json`
+- Analog gauge: `python evaluate_samples.py samples/analog-manifest-template.csv --output analog-report.json`
+- Digital OCR: `python evaluate_digital_samples.py samples/digital-manifest-template.csv --output digital-report.json`
 
 CSV templates are in `samples/`. Put the corresponding instrument images beside each manifest (or use paths relative to the manifest). Fill `expected_value` only with a reading independently confirmed from the instrument or a trusted reference. Blank reference values are processed but excluded from accuracy metrics. Reports include MAE, RMSE and MAPE; digital OCR also reports exact-match percentage. Metrics are only meaningful with verified references and correctly calibrated instruments.
 
@@ -64,6 +64,10 @@ The repository root contains `render.yaml`. It defines a Free Docker web service
 
 The Blueprint sets `CORS_ORIGINS=https://sasinath18.github.io`. Update this value if the dashboard is moved to a different origin.
 
-## Camera capture\n\nThe dashboard can request browser camera permission and capture a still image for the existing image-analysis API. Camera access requires HTTPS (GitHub Pages) or localhost. This is one-frame capture, not continuous video analysis.\n\n## Prototype limitations
+## Camera capture
+
+The dashboard can request browser camera permission and capture a still image for the existing image-analysis API. Camera access requires HTTPS (GitHub Pages) or localhost. This is one-frame capture, not continuous video analysis.
+
+## Prototype limitations
 
 Analog pointer detection and digital OCR are experimental and are not certified measurement systems. Validate results against independently verified reference readings before operational use. Jobs are stored in process memory and uploaded files on local disk; this is not durable multi-user production storage.
