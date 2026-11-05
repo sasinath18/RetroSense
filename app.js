@@ -340,6 +340,7 @@ async function startCapture({silent=false}={}){
     if(isAuth)setApiState("TOKEN REQUIRED");
     else if(error.name==="AbortError"||error.name==="TimeoutError")setApiState("SLOW RESPONSE");
     else if(/fetch|network|health check|backend/i.test(error.message))setApiState("OFFLINE");
+    if(silent&&(isAuth||error.name==="AbortError"||error.name==="TimeoutError"||/fetch|network|health check|backend/i.test(error.message)))stopAutoCapture();
     $("#cameraStatus").textContent=error.message;
     if(!silent)alert("Could not analyze this image.\n"+error.message+"\n\nCheck the API connection, access token, image and calibration.");
   }finally{
