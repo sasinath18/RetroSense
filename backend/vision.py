@@ -1,4 +1,4 @@
-"""Experimental analog dial reader using OpenCV; requires a clear, front-facing circular gauge."""
+"""Experimental analog dial reader using radial pointer segmentation and OpenCV."""
 import math
 
 import cv2
@@ -35,11 +35,8 @@ def _select_gauge_circle(circles, image_width, image_height):
     candidates = []
     for x, y, radius in circles[0]:
         offset = math.hypot(x - image_width / 2, y - image_height / 2)
-        if radius < min_dimension * 0.25:
+        if radius < min_dimension * 0.25 or offset > min_dimension * 0.22:
             continue
-        if offset > min_dimension * 0.22:
-            continue
-        # Centrality is the primary criterion; a modest radius preference breaks ties.
         score = offset - radius * 0.02
         candidates.append((score, float(x), float(y), float(radius)))
     if not candidates:
@@ -48,6 +45,58 @@ def _select_gauge_circle(circles, image_width, image_height):
         )
     _, cx, cy, radius = min(candidates)
     return cx, cy, radius
+
+
+def _longest_true_run(mask):
+    """Length of the longest contiguous True run in a one-dimensional array."""
+    padded = np.concatenate(([False], mask, [False]))
+    changes = np.diff(padded.astype(np.int8))
+    starts = np.flatnonzero(changes == 1)
+    ends = np.flatnonzero(changes == -1)
+    return int(np.max(ends - starts)) if len(starts) else 0
+
+
+def _detect_pointer_angle(gray, cx, cy, radius, start_angle, end_angle):
+    """Find the strongest dark radial pointer segment while excluding outer tick marks."""
+    height, width = gray.shape
+    sweep = _wrap_delta(end_angle, start_angle)
+    if sweep < 1 or sweep > 359:
+        raise GaugeReadError("Invalid calibration angles.")
+
+    # Search only the dial interior: tick marks and printed numerals are mostly outside this band.
+    radii = np.linspace(radius * 0.20, radius * 0.80, 180)
+    angles = np.linspace(start_angle, start_angle + sweep, max(361, int(sweep * 2) + 1))
+    angle_grid, radius_grid = np.meshgrid(np.deg2rad(angles), radii)
+    map_x = (cx + radius_grid * np.cos(angle_grid)).astype(np.float32)
+    map_y = (cy + radius_grid * np.sin(angle_grid)).astype(np.float32)
+    polar = cv2.remap(gray, map_x, map_y, interpolation=cv2.INTER_LINEAR,
+                      borderMode=cv2.BORDER_CONSTANT, borderValue=255)
+
+    # Dark needle pixels form a relatively long radial run. Otsu adapts to dial brightness.
+    _, binary = cv2.threshold(polar, 0, 1, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    # Ignore near-hub screw details; require a continuous run across the radial band.
+    scores = np.zeros(len(angles), dtype=np.float32)
+    run_lengths = np.zeros(len(angles), dtype=np.int32)
+    for index in range(len(angles)):
+        ray = binary[:, index].astype(bool)
+        run = _longest_true_run(ray)
+        run_lengths[index] = run
+        # Reward long uninterrupted runs, with a small preference for reaching farther out.
+        scores[index] = run + 0.12 * int(np.flatnonzero(ray)[-1] if np.any(ray) else 0)
+
+    # Smooth neighbouring rays to tolerate a pointer wider than one pixel.
+    scores = np.convolve(scores, np.ones(5, dtype=np.float32) / 5, mode="same")
+    best = int(np.argmax(scores))
+    if run_lengths[best] < 14:
+        raise GaugeReadError("No continuous pointer segment found inside the dial. Improve focus or lighting.")
+
+    angle = float(angles[best] % 360.0)
+    # Contrast against the next-best direction gives a cautious heuristic diagnostic.
+    exclusion = np.ones(len(scores), dtype=bool)
+    exclusion[max(0, best - 8):min(len(scores), best + 9)] = False
+    runner_up = float(np.max(scores[exclusion])) if np.any(exclusion) else 0.0
+    separation = float(scores[best] - runner_up)
+    return angle, int(run_lengths[best]), round(separation, 2)
 
 
 def read_analog_gauge(image_bytes, min_value, max_value, start_angle=135.0, end_angle=45.0):
@@ -68,54 +117,22 @@ def read_analog_gauge(image_bytes, min_value, max_value, start_angle=135.0, end_
         minRadius=max(20, min(h, w) // 8), maxRadius=min(h, w) // 2
     )
     cx, cy, radius = _select_gauge_circle(circles, w, h)
-
-    edges = cv2.Canny(gray, 45, 130)
-    lines = cv2.HoughLinesP(
-        edges, 1, np.pi / 180, threshold=max(25, int(radius * 0.22)),
-        minLineLength=max(20, int(radius * 0.28)),
-        maxLineGap=max(8, int(radius * 0.08))
+    pointer_angle, pointer_run, separation = _detect_pointer_angle(
+        gray, cx, cy, radius, start_angle, end_angle
     )
-    if lines is None:
-        raise GaugeReadError("No pointer-like line detected in the dial.")
-
-    sweep = _wrap_delta(end_angle, start_angle)
-    if sweep < 1 or sweep > 359:
-        raise GaugeReadError("Invalid calibration angles.")
-
-    candidates = []
-    for x1, y1, x2, y2 in lines[:, 0, :]:
-        d1 = math.hypot(x1 - cx, y1 - cy)
-        d2 = math.hypot(x2 - cx, y2 - cy)
-        if d1 < d2:
-            near, far, fx, fy = d1, d2, x2, y2
-        else:
-            near, far, fx, fy = d2, d1, x1, y1
-        if near > radius * 0.23 or far < radius * 0.35 or far > radius * 1.08:
-            continue
-        angle = math.degrees(math.atan2(fy - cy, fx - cx)) % 360
-        if _wrap_delta(angle, start_angle) > sweep:
-            continue
-        score = (far - near) - near * 0.8
-        candidates.append((score, angle, far, near))
-
-    if not candidates:
-        raise GaugeReadError("Could not isolate a pointer from dial markings. Try a sharper, tightly cropped image.")
-
-    candidates.sort(reverse=True)
-    best_score, pointer_angle, pointer_length, near_distance = candidates[0]
     value = angle_to_value(pointer_angle, min_value, max_value, start_angle, end_angle)
-    score_gap = best_score - candidates[1][0] if len(candidates) > 1 else best_score
-    confidence = "low" if near_distance > radius * 0.12 or score_gap < radius * 0.08 else "experimental"
 
+    # Heuristic only: the score gap is not a statistically calibrated probability.
+    confidence = "experimental" if separation >= 5 and pointer_run >= 24 else "low"
     return {
         "value": round(value, 2),
         "pointer_angle_deg": round(pointer_angle, 2),
         "dial": {"center_x": round(cx, 1), "center_y": round(cy, 1), "radius": round(radius, 1)},
         "confidence": confidence,
         "diagnostics": {
-            "candidate_lines": len(candidates),
-            "pointer_length_px": round(pointer_length, 1),
-            "pointer_center_offset_px": round(near_distance, 1),
+            "pointer_radial_run_px": pointer_run,
+            "direction_score_separation": separation,
+            "detection_method": "polar_radial_dark_run",
         },
-        "note": "Experimental Hough-line estimate; confidence is not a probability. Verify against a calibrated reference.",
+        "note": "Experimental radial pointer estimate; confidence is heuristic, not a probability. Verify against a calibrated reference.",
     }
