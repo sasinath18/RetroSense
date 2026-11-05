@@ -40,7 +40,7 @@ Interactive API docs: `http://127.0.0.1:8000/docs`
 The `/api/health` endpoint stays public for hosting health checks. When `RETROSENSE_API_TOKEN` is configured, image analysis, job creation, job start, CSV export and reading history require the `X-API-Token` header. Local development leaves this unset by default. The dashboard stores the entered token only in the current browser session.
 - `WS /ws/jobs/{job_id}`: simulated demo telemetry only; it is not a live camera or sensor stream.
 
-Supported upload types: JPEG, PNG, WEBP and BMP; maximum size 12 MB.
+Supported upload types: JPEG, PNG, WEBP and BMP; maximum size 12 MB. Image bytes are decoded and checked, with a 20-megapixel decoded-image limit.
 
 ## Digital OCR dependency
 
