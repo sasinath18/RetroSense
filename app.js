@@ -318,7 +318,7 @@ document.querySelectorAll(".mode").forEach(button=>button.addEventListener("clic
     :"Digital mode: OCR reads the displayed digits. Set unit and alert thresholds for this instrument.","info");
 }));
 $("#fileInput").addEventListener("change",event=>{
-  if(showSelectedFile(event.target.files[0]))showAnalysisFeedback("Image selected. Confirm instrument name, unit, scale and calibration before analysis.","info");
+  showSelectedFile(event.target.files[0]);
 });
 $("#dropzone").addEventListener("dragover",event=>{event.preventDefault();event.currentTarget.classList.add("drag-active")});
 $("#dropzone").addEventListener("dragleave",event=>event.currentTarget.classList.remove("drag-active"));
