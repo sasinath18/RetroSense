@@ -24,6 +24,29 @@ def test_end_angle_maps_to_maximum():
     assert angle_to_value(45, 0, 100, 135, 45) == pytest.approx(100)
 
 
+def test_read_analog_falls_back_when_hough_candidate_is_outside_calibration(monkeypatch):
+    monkeypatch.setattr(
+        "vision.cv2.HoughCircles",
+        lambda *args, **kwargs: np.array([[[100.0, 100.0, 70.0]]], dtype=np.float32),
+    )
+    monkeypatch.setattr(
+        "vision._detect_pointer_angle_hough",
+        lambda *args: (90.0, 80.0, 1.0),
+    )
+    monkeypatch.setattr(
+        "vision._detect_pointer_angle",
+        lambda *args: (220.0, 30, 10.0),
+    )
+    image = np.full((200, 200, 3), 245, dtype=np.uint8)
+    ok, encoded = cv2.imencode(".png", image)
+    assert ok
+
+    result = read_analog_gauge(encoded.tobytes(), 0, 100, 135, 45)
+
+    assert result["value"] == pytest.approx(31.48, abs=0.01)
+    assert result["diagnostics"]["detection_method"] == "polar_radial_dark_run"
+
+
 def test_pointer_outside_scale_is_rejected():
     with pytest.raises(GaugeReadError):
         angle_to_value(90, 0, 100, 135, 45)
