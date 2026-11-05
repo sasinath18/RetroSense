@@ -9,6 +9,20 @@ class GaugeReadError(ValueError):
 def _wrap_delta(angle, start):
     return (angle - start + 360.0) % 360.0
 
+def angle_to_value(pointer_angle, min_value, max_value, start_angle, end_angle):
+    """Map an image-coordinate angle onto a calibrated dial sweep."""
+    if max_value <= min_value:
+        raise GaugeReadError("Maximum value must be greater than minimum value.")
+    sweep = _wrap_delta(end_angle, start_angle)
+    if sweep < 1 or sweep > 359:
+        raise GaugeReadError("Invalid calibration angles.")
+    position = _wrap_delta(pointer_angle, start_angle)
+    fraction = position / sweep
+    if fraction > 1.0:
+        raise GaugeReadError("Pointer appears outside the calibrated scale. Check start/end angles.")
+    return min_value + fraction * (max_value - min_value)
+
+
 def read_analog_gauge(image_bytes, min_value, max_value, start_angle=135.0, end_angle=45.0):
     arr = np.frombuffer(image_bytes, dtype=np.uint8)
     image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
@@ -39,12 +53,8 @@ def read_analog_gauge(image_bytes, min_value, max_value, start_angle=135.0, end_
     if not candidates:
         raise GaugeReadError("Could not isolate a pointer from dial markings. Try a sharper image.")
     _,pointer_angle,pointer_length=max(candidates)
-    sweep=_wrap_delta(end_angle,start_angle)
-    position=_wrap_delta(pointer_angle,start_angle)
-    if sweep<1 or sweep>359: raise GaugeReadError("Invalid calibration angles.")
-    fraction=position/sweep
-    if fraction>1: raise GaugeReadError("Pointer appears outside calibrated scale. Check start/end angles.")
-    return {"value":round(min_value+fraction*(max_value-min_value),2),
+    value = angle_to_value(pointer_angle, min_value, max_value, start_angle, end_angle)
+    return {"value":round(value,2),
         "pointer_angle_deg":round(pointer_angle,2),
         "dial":{"center_x":round(cx,1),"center_y":round(cy,1),"radius":round(radius,1)},
         "confidence":"experimental",
