@@ -1,5 +1,5 @@
 const $=s=>document.querySelector(s);let mode="analog",selectedFile=null,jobId=null,history=[],alerts=[],samples=[],chart;
-const isLocalHost=["localhost","127.0.0.1"].includes(location.hostname);
+let cameraStream=null;\nconst isLocalHost=["localhost","127.0.0.1"].includes(location.hostname);
 const configuredApi=String(window.RETROSENSE_API_URL||"").trim();
 // Local development uses the local FastAPI server. A deployed dashboard must be
 // explicitly pointed at its Render API instead of incorrectly calling GitHub Pages.
@@ -21,6 +21,37 @@ $("#dropzone").addEventListener("drop",e=>{e.preventDefault();e.currentTarget.st
 async function startCapture(){const c=config();if(mode==="analog"&&c.max<=c.min){alert("Maximum value must be greater than minimum value.");return}if(c.danger<c.warning){alert("Danger threshold must be greater than or equal to warning threshold.");return}if(!selectedFile){alert("Choose a gauge image first.");return}if(!api){$("#apiStatus").textContent="NOT CONFIGURED";alert("RetroSense API is not configured for this deployed dashboard. Deploy the FastAPI backend to Render, then set window.RETROSENSE_API_URL in index.html to the Render service URL.");return}if(selectedFile.type.startsWith("video/")){alert("Video processing is not implemented yet. Upload a JPG or PNG gauge image.");return}const btn=$("#analyzeBtn");btn.disabled=true;btn.textContent="Analyzing image…";try{const health=await fetch(api+"/api/health",{signal:AbortSignal.timeout(2500)});if(!health.ok)throw Error("API unavailable");$("#apiStatus").textContent="ONLINE";const fd=new FormData();fd.append("file",selectedFile);fd.append("mode",mode);fd.append("min_value",c.min);fd.append("max_value",c.max);fd.append("start_angle",$("#startAngle").value);fd.append("end_angle",$("#endAngle").value);const res=await fetch(api+"/api/analyze",{method:"POST",body:fd});const data=await res.json();if(!res.ok)throw Error(data.detail||"Image analysis failed");jobId=null;addReading(Number(data.value));$("#readingTime").textContent=(mode==="digital"?"OCR estimate · ":"CV estimate · ")+now();alert(mode==="digital"?"OCR reading: "+data.value+" "+c.unit+"\\nRecognized text: "+data.raw_text+"\\nOCR score: "+data.confidence+" (not measurement accuracy). Verify manually.":"Estimated reading: "+data.value+" "+c.unit+"\\nPointer angle: "+data.pointer_angle_deg+"°\\nConfidence: experimental. Verify manually.");}catch(err){$("#apiStatus").textContent="OFFLINE";alert("Could not analyze this image.\\n"+err.message+"\\n\\nStart the FastAPI backend and check the image/calibration.");}finally{btn.disabled=false;btn.innerHTML='Analyze instrument <span>→</span>'}}
 function runDemo(){const c=config();let n=0;const timer=setInterval(()=>{const v=Math.max(c.min,Math.min(c.max,c.min+(c.max-c.min)*(.56+.12*Math.sin(n/3)+.025*(Math.random()-.5))));addReading(v);n++;if(n>=20)clearInterval(timer)},850)}
 function connectSocket(id){const ws=new WebSocket(api.replace("http","ws")+`/ws/jobs/${id}`);ws.onmessage=e=>{const d=JSON.parse(e.data);if(typeof d.value==="number")addReading(d.value)};ws.onclose=()=>$("#apiStatus").textContent="ONLINE"}
+async function openCamera(){
+  const panel=$("#cameraPanel"),video=$("#cameraVideo"),start=$("#cameraStart"),capture=$("#cameraCapture"),stop=$("#cameraStop"),status=$("#cameraStatus");
+  if(!navigator.mediaDevices?.getUserMedia){status.textContent="Camera access is unavailable. Use HTTPS or localhost, or upload an image.";panel.hidden=false;return}
+  try{
+    cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false});
+    video.srcObject=cameraStream;panel.hidden=false;await video.play();
+    start.disabled=true;capture.disabled=false;stop.disabled=false;status.textContent="Camera is ready. Position the instrument and capture a frame.";
+  }catch(err){panel.hidden=false;status.textContent="Could not open camera: "+err.message+". Check browser camera permission or upload an image."}
+}
+function closeCamera(){
+  if(cameraStream){cameraStream.getTracks().forEach(track=>track.stop());cameraStream=null}
+  const video=$("#cameraVideo");if(video)video.srcObject=null;
+  $("#cameraStart").disabled=false;$("#cameraCapture").disabled=true;$("#cameraStop").disabled=true;
+  $("#cameraStatus").textContent="Camera is off.";
+}
+async function captureCameraFrame(){
+  const video=$("#cameraVideo"),canvas=$("#cameraCanvas");
+  if(!cameraStream||!video.videoWidth||!video.videoHeight){$("#cameraStatus").textContent="Camera is not ready yet.";return}
+  canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+  const context=canvas.getContext("2d");context.drawImage(video,0,0,canvas.width,canvas.height);
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",0.92));
+  if(!blob){$("#cameraStatus").textContent="Could not capture this frame. Try again.";return}
+  selectedFile=new File([blob],"retrosense-camera-"+Date.now()+".jpg",{type:"image/jpeg"});
+  $("#fileName").textContent=selectedFile.name+" · camera frame";
+  $("#cameraStatus").textContent="Frame captured. Sending image for analysis…";
+  await startCapture();
+}
+$("#cameraStart").addEventListener("click",openCamera);
+$("#cameraCapture").addEventListener("click",captureCameraFrame);
+$("#cameraStop").addEventListener("click",closeCamera);
+window.addEventListener("pagehide",closeCamera);
 $("#analyzeBtn").addEventListener("click",startCapture);
 $("#exportBtn").addEventListener("click",()=>{if(!history.length){alert("No readings available to export.");return}const rows=[["timestamp","instrument","reading","unit","status"],...history.map(r=>[r.time,r.name,r.value,r.unit,r.status])];const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="retrosense-readings.csv";a.click();URL.revokeObjectURL(a.href)});
 initChart();$("#latestStat").textContent="—";$("#gaugeValue").textContent="—";$("#alertStat").textContent="WAITING";$("#alertStat").style.color="var(--muted)";$("#readingTime").textContent="No image analyzed yet";$("#updatedLabel").textContent="—";
