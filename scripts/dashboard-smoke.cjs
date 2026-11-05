@@ -11,16 +11,17 @@ function makeDashboard({withChart = true} = {}) {
   const calls = [];
   const local = new Map();
   const session = new Map();
+  const createdElements = [];
 
   function makeElement(id = "") {
     const listeners = {};
     const classes = new Set();
     const element = {
-      id, listeners, textContent: "", innerHTML: "", value: "", files: [],
+      id, listeners, textContent: "", innerHTML: "", value: "", files: [], clickCount: 0,
       style: {}, dataset: {}, disabled: false, hidden: false, src: "",
       className: "", width: 0, height: 0, lastChild: {textContent: ""},
       addEventListener(type, callback) { listeners[type] = callback; },
-      click() { if (listeners.click) return listeners.click({preventDefault() {}}); },
+      click() { this.clickCount++; if (listeners.click) return listeners.click({preventDefault() {}}); },
       setAttribute(name, value) { this[name] = String(value); },
       removeAttribute(name) { delete this[name]; },
       appendChild(child) { (this.children ||= []).push(child); },
@@ -93,6 +94,7 @@ function makeDashboard({withChart = true} = {}) {
     createElement(tag) {
       const node = makeElement(tag);
       node.download = "";
+      createdElements.push(node);
       return node;
     }
   };
@@ -159,7 +161,7 @@ function makeDashboard({withChart = true} = {}) {
   };
 
   vm.runInNewContext(source, sandbox, {filename: "app.js"});
-  return {elements, modeButtons, navButtons, alerts, calls, sandbox};
+  return {elements, element: el, modeButtons, navButtons, alerts, calls, createdElements, sandbox};
 }
 
 async function waitForStartup() {
@@ -168,7 +170,7 @@ async function waitForStartup() {
 
 async function run(withChart) {
   const dashboard = makeDashboard({withChart});
-  const {elements, modeButtons, navButtons, alerts, calls} = dashboard;
+  const {elements, element, modeButtons, navButtons, alerts, calls, createdElements} = dashboard;
   await waitForStartup();
 
   assert.equal(elements.get("apiStatus").textContent, "ONLINE", "API health status should become ONLINE");
@@ -177,6 +179,8 @@ async function run(withChart) {
   modeButtons[1].listeners.click();
   assert.equal(elements.get("modeStat").textContent, "DIGITAL", "Mode switch should update the dashboard");
   modeButtons[0].listeners.click();
+  navButtons[1].listeners.click();
+  assert.equal(navButtons[1].classList.contains("active"), true, "Navigation click should mark its destination active");
 
   const fileInput = elements.get("fileInput");
   const validFile = {name: "gauge.png", type: "image/png", size: 125000};
@@ -190,25 +194,28 @@ async function run(withChart) {
   assert.equal(elements.get("fileName").textContent, "No file selected", "Invalid file should clear selected filename");
   fileInput.listeners.change({target: {files: [validFile]}});
 
-  elements.get("maxValue").value = "0";
+  element("maxValue").value = "0";
   const jobsBeforeInvalid = calls.filter(call => call.url.endsWith("/api/jobs")).length;
   await elements.get("analyzeBtn").listeners.click();
   assert.equal(calls.filter(call => call.url.endsWith("/api/jobs")).length, jobsBeforeInvalid, "Invalid scale must stop before upload");
   assert.ok(alerts.some(message => message.includes("Maximum value")), "Invalid scale should explain the problem");
 
-  elements.get("maxValue").value = "100";
+  element("maxValue").value = "100";
   await elements.get("analyzeBtn").listeners.click();
   assert.equal(elements.get("latestStat").textContent, "76.3", "Successful image analysis should update latest reading");
   assert.equal(elements.get("alertStat").textContent, "WARNING", "Threshold status should update");
   assert.ok(elements.get("historyBody").innerHTML.includes("Boiler pressure gauge"), "Reading should appear in history");
-  assert.deepEqual(Array.from(elements.get("trendChart").__unused || []), []);
+  assert.equal(elements.get("trendChart").getBoundingClientRect().width, 640, "Trend chart canvas should remain measurable");
   assert.equal(elements.get("apiStatus").textContent, "ONLINE", "API status should remain online after analysis");
 
-  const exported = elements.get("exportBtn").listeners.click();
-  assert.ok(typeof exported !== "undefined" || calls.some(call => call.method === "GET"), "Export control should be wired");
+  elements.get("exportBtn").listeners.click();
+  const downloadLink = createdElements.find(node => node.download === "retrosense-readings.csv");
+  assert.ok(downloadLink, "CSV export should create a downloadable file link");
+  assert.equal(downloadLink.clickCount, 1, "CSV export should trigger the download link");
 
-  const missingCamera = elements.get("cameraStart").listeners.click();
-  assert.ok(typeof missingCamera !== "undefined" || elements.get("cameraPanel").hidden === true, "Camera control should be wired");
+  await elements.get("cameraStart").listeners.click();
+  assert.equal(elements.get("cameraPanel").hidden, false, "Camera failure should display an actionable status panel");
+  assert.ok(elements.get("cameraStatus").textContent.includes("Camera access is unavailable"), "Camera failure should explain HTTPS/localhost requirement");
 
   return {withChart, apiCalls: calls.length, alerts: alerts.length};
 }
