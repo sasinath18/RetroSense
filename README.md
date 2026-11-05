@@ -6,7 +6,7 @@ AI-assisted digitization of legacy industrial instruments from uploaded images.
 
 - Responsive dashboard with reading trend, threshold alerts, browser-persisted history and CSV export
 - Optional browser camera preview and one-frame capture for instrument image analysis
-- FastAPI backend with upload validation, finite-value checks and health endpoint
+- FastAPI backend with MIME and image-content validation, finite-value checks and health endpoint
 - SQLite-backed analysis job and reading history, with a browser-local history cache
 - Experimental OpenCV analog-gauge pointer estimation
 - Experimental digital-display OCR using OpenCV preprocessing and Tesseract
