@@ -1,5 +1,5 @@
 const $=s=>document.querySelector(s);let mode="analog",selectedFile=null,jobId=null,history=[],alerts=[],samples=[],chart;
-let cameraStream=null;
+let cameraStream=null,cameraTimer=null;
 const isLocalHost=["localhost","127.0.0.1"].includes(location.hostname);
 const configuredApi=String(window.RETROSENSE_API_URL||"").trim();
 // Local development uses the local FastAPI server. A deployed dashboard must be
@@ -143,7 +143,12 @@ async function openCamera(){
     start.disabled=true;capture.disabled=false;stop.disabled=false;status.textContent="Camera is ready. Position the instrument and capture a frame.";
   }catch(err){panel.hidden=false;status.textContent="Could not open camera: "+err.message+". Check browser camera permission or upload an image."}
 }
+function stopAutoCapture(){
+  if(cameraTimer){clearInterval(cameraTimer);cameraTimer=null}
+  $("#cameraAutoStart").disabled=false;$("#cameraAutoStop").disabled=true;
+}
 function closeCamera(){
+  stopAutoCapture();
   if(cameraStream){cameraStream.getTracks().forEach(track=>track.stop());cameraStream=null}
   const video=$("#cameraVideo");if(video)video.srcObject=null;
   $("#cameraStart").disabled=false;$("#cameraCapture").disabled=true;$("#cameraStop").disabled=true;
@@ -161,8 +166,22 @@ async function captureCameraFrame(){
   $("#cameraStatus").textContent="Frame captured. Sending image for analysis…";
   await startCapture();
 }
+async function startAutoCapture(){
+  if(!cameraStream)await openCamera();
+  if(!cameraStream)return;
+  if(cameraTimer)return;
+  $("#cameraAutoStart").disabled=true;$("#cameraAutoStop").disabled=false;
+  $("#cameraStatus").textContent="Automatic capture enabled: one still frame every five seconds.";
+  await captureCameraFrame();
+  if(!cameraStream){stopAutoCapture();return}
+  cameraTimer=setInterval(()=>{
+    if(cameraStream&&!$("#analyzeBtn").disabled)captureCameraFrame();
+  },5000);
+}
 $("#cameraStart").addEventListener("click",openCamera);
 $("#cameraCapture").addEventListener("click",captureCameraFrame);
+$("#cameraAutoStart").addEventListener("click",startAutoCapture);
+$("#cameraAutoStop").addEventListener("click",stopAutoCapture);
 $("#cameraStop").addEventListener("click",closeCamera);
 window.addEventListener("pagehide",closeCamera);
 $("#analyzeBtn").addEventListener("click",startCapture);
