@@ -22,7 +22,7 @@
     <div class="side-bottom"><div class="connection"><i></i><span>LOCAL SYSTEM</span><b id="apiStatus">DEMO</b></div><p>RETROSENSE PROTOTYPE<br>v0.4.0 · BUILD 004</p></div>
   </aside>
   <main class="main" id="overview">
-    <header class="topbar"><div><div class="eyebrow">INDUSTRIAL MONITORING / WORKSPACE</div><h1>Instrument overview</h1></div><div class="top-actions"><span class="live-pill"><i></i> SYSTEM READY</span><button class="btn btn-primary" onclick="document.querySelector('#capture').scrollIntoView({behavior:'smooth'})">＋ New capture</button></div></header>
+    <header class="topbar"><div><div class="eyebrow">INDUSTRIAL MONITORING / WORKSPACE</div><h1>Instrument overview</h1></div><div class="top-actions"><span class="live-pill is-pending" id="systemState" aria-live="polite"><i></i> CHECKING API</span><button class="btn btn-primary" onclick="document.querySelector('#capture').scrollIntoView({behavior:'smooth'})">＋ New capture</button></div></header>
     <section class="stats">
       <article class="stat"><span>ACTIVE INSTRUMENT</span><strong id="instrumentStat">01</strong><small>Connected session</small></article>
       <article class="stat"><span>LATEST READING</span><strong><b id="latestStat">64.2</b> <em id="unitStat">PSI</em></strong><small id="readingTime">Waiting for data</small></article>
@@ -39,7 +39,7 @@
     <section class="grid-bottom">
       <article class="panel capture-panel" id="capture"><div class="panel-head"><div><div class="eyebrow">INPUT CONFIGURATION</div><h2>New instrument capture</h2></div><span class="step">01 / INPUT</span></div>
         <div class="mode-switch"><button class="mode active" data-mode="analog">◉ Analog gauge</button><button class="mode" data-mode="digital">▣ Digital display</button></div>
-        <label class="dropzone" id="dropzone"><input id="fileInput" type="file" accept="image/jpeg,image/png,image/webp,image/bmp"><span class="upload-icon">↑</span><b>Drop an instrument image here</b><small>or <u>browse files</u> · JPG, PNG, WEBP, BMP</small><span id="fileName" class="file-name">No file selected</span></label>
+        <label class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose or drop an instrument image"><input id="fileInput" type="file" accept="image/jpeg,image/png,image/webp,image/bmp"><span class="upload-icon">↑</span><b>Drop an instrument image here</b><small>or <u>browse files</u> · JPG, PNG, WEBP, BMP</small><span id="fileName" class="file-name">No file selected</span></label><img id="selectedPreview" class="selected-preview" alt="Selected instrument preview" hidden>
         <div class="camera-tools">
           <button class="btn btn-ghost" id="cameraStart" type="button">◎ Open camera</button>
           <button class="btn btn-ghost" id="cameraCapture" type="button" disabled>Capture frame</button>
