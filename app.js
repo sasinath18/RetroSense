@@ -50,7 +50,7 @@ function updateGauge(value,c){
 }
 function addReading(v,details={}){
   if(!Number.isFinite(v))throw Error("The backend returned an invalid numeric reading.");
-  const c=config(),s=details.status||status(v,c),t=details.displayTime||now();
+  const c=details.scale||config(),s=details.status||status(v,c),t=details.displayTime||now();
   $("#latestStat").textContent=v.toFixed(1);$("#unitStat").textContent=details.unit||c.unit;
   $("#gaugeValue").textContent=v.toFixed(1);$("#gaugeUnit").textContent=details.unit||c.unit;
   $("#updatedLabel").textContent=t;$("#readingTime").textContent="Updated at "+t;
@@ -270,18 +270,22 @@ document.querySelectorAll(".nav").forEach(link=>link.addEventListener("click",()
 }));
 async function startCapture({silent=false}={}){
   if(isAnalyzing)return;
-  let c;
+  let c,captureMode,captureFile,captureStartAngle=135,captureEndAngle=45;
   try{
     c=config();
+    captureMode=mode;
+    captureFile=selectedFile;
     if(c.max<=c.min)throw Error("Maximum value must be greater than minimum value.");
     if(c.warning<c.min||c.danger>c.max)throw Error("Warning and danger thresholds must be within the instrument range.");
     if(c.danger<c.warning)throw Error("Danger threshold must be greater than or equal to warning threshold.");
-    if(mode==="analog"){
-      const start=numericInput("#startAngle","Start angle"),end=numericInput("#endAngle","End angle");
-      if(start<0||start>359||end<0||end>359||start===end)throw Error("Calibration angles must be different values between 0 and 359 degrees.");
+    if(captureMode==="analog"){
+      captureStartAngle=numericInput("#startAngle","Start angle");
+      captureEndAngle=numericInput("#endAngle","End angle");
+      if(captureStartAngle<0||captureStartAngle>359||captureEndAngle<0||captureEndAngle>359||captureStartAngle===captureEndAngle)
+        throw Error("Calibration angles must be different values between 0 and 359 degrees.");
     }
   }catch(error){if(!silent)alert(error.message);else $("#cameraStatus").textContent=error.message;return}
-  if(!selectedFile){if(!silent)alert("Choose an instrument image first.");return}
+  if(!captureFile){if(!silent)alert("Choose an instrument image first.");return}
   if(!api){setApiState("NOT CONFIGURED");if(!silent)alert("The FastAPI backend URL is not configured.");return}
   if(isAnalyzing)return;
   const btn=$("#analyzeBtn");isAnalyzing=true;btn.disabled=true;
@@ -292,11 +296,11 @@ async function startCapture({silent=false}={}){
     if(!health.ok)throw Error("Backend health check failed ("+health.status+").");
     setApiState("ONLINE");
     const fd=new FormData();
-    fd.append("file",selectedFile);fd.append("mode",mode);fd.append("machine_name",c.name);fd.append("unit",c.unit);
+    fd.append("file",captureFile);fd.append("mode",captureMode);fd.append("machine_name",c.name);fd.append("unit",c.unit);
     fd.append("min_value",c.min);fd.append("max_value",c.max);fd.append("warning_limit",c.warning);fd.append("danger_limit",c.danger);
-    if(mode==="analog"){
-      fd.append("start_angle",numericInput("#startAngle","Start angle"));
-      fd.append("end_angle",numericInput("#endAngle","End angle"));
+    if(captureMode==="analog"){
+      fd.append("start_angle",captureStartAngle);
+      fd.append("end_angle",captureEndAngle);
     }
     const createdResponse=await authorizedFetch(api+"/api/jobs",{method:"POST",body:fd,signal:timeout},true);
     const created=await createdResponse.json().catch(()=>({detail:"Backend returned an unreadable response."}));
@@ -317,13 +321,13 @@ async function startCapture({silent=false}={}){
     addReading(Number(reading.value),{
       timestamp:reading.timestamp,instrument:reading.instrument,unit:reading.unit,
       status:reading.status,mode:reading.mode,job_id:jobId,
-      displayTime:new Date(reading.timestamp).toLocaleTimeString()
+      displayTime:new Date(reading.timestamp).toLocaleTimeString(),scale:c
     });
-    $("#readingTime").textContent=(mode==="digital"?"OCR estimate · ":"CV estimate · ")+now();
+    $("#readingTime").textContent=(captureMode==="digital"?"OCR estimate · ":"CV estimate · ")+now();
     setApiState("ONLINE");
     await syncServerHistory();
     $("#cameraStatus").textContent=$("#cameraPanel").hidden?"Camera is off.":"Frame analyzed: "+reading.value+" "+reading.unit+".";
-    const message=mode==="digital"
+    const message=captureMode==="digital"
       ?"OCR reading: "+reading.value+" "+reading.unit+"\nRecognized text: "+(analysis.raw_text||"")+
        "\nOCR score: "+(analysis.confidence??"not available")+" (not measurement accuracy)."+
        (analysis.ambiguous?"\nWARNING: OCR methods disagree. Candidate readings: "+(analysis.candidate_values||[]).join(", "):"")+
