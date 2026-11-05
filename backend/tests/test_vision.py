@@ -167,3 +167,32 @@ def test_digital_ocr_extracts_numeric_token_and_confidence(monkeypatch):
     assert result["value"] == 72.5
     assert result["raw_text"] == "72.5"
     assert result["confidence"] == 91.2
+
+
+
+def test_digital_ocr_flags_disagreement_between_segmentation_modes(monkeypatch):
+    import digital_ocr
+
+    class FakeOutput:
+        DICT = "dict"
+
+    class FakeTesseract:
+        @staticmethod
+        def image_to_data(image, config, output_type):
+            if "--psm 6" in config or "--psm 7" in config:
+                value, confidence = "78.9", "90"
+            else:
+                value, confidence = "78.5", "36"
+            return {"text": [value], "conf": [confidence]}
+
+    image = np.full((80, 180, 3), 255, dtype=np.uint8)
+    ok, encoded = cv2.imencode(".png", image)
+    assert ok
+    monkeypatch.setattr(digital_ocr, "pytesseract", FakeTesseract)
+    monkeypatch.setattr(digital_ocr, "Output", FakeOutput)
+
+    result = digital_ocr.read_digital_display(encoded.tobytes())
+
+    assert result["value"] == 78.9
+    assert result["ambiguous"] is True
+    assert set(result["candidate_values"]) == {78.5, 78.9}
