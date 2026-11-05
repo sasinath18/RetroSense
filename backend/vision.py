@@ -21,9 +21,19 @@ def angle_to_value(pointer_angle, min_value, max_value, start_angle, end_angle):
     if sweep < 1 or sweep > 359:
         raise GaugeReadError("Invalid calibration angles.")
     position = _wrap_delta(pointer_angle, start_angle)
+    # Small endpoint tolerance absorbs a few degrees of circle/line-detection error.
+    # This is a calibration tolerance, not a general allowance for out-of-scale pointers.
+    endpoint_tolerance = 5.0
+    if position > sweep:
+        distance_before_start = 360.0 - position
+        distance_after_end = position - sweep
+        if distance_before_start <= endpoint_tolerance:
+            position = 0.0
+        elif distance_after_end <= endpoint_tolerance:
+            position = sweep
+        else:
+            raise GaugeReadError("Pointer appears outside the calibrated scale. Check start/end angles.")
     fraction = position / sweep
-    if fraction > 1.0:
-        raise GaugeReadError("Pointer appears outside the calibrated scale. Check start/end angles.")
     return min_value + fraction * (max_value - min_value)
 
 
@@ -54,6 +64,73 @@ def _longest_true_run(mask):
     starts = np.flatnonzero(changes == 1)
     ends = np.flatnonzero(changes == -1)
     return int(np.max(ends - starts)) if len(starts) else 0
+
+
+def _detect_pointer_angle_hough(gray, cx, cy, radius):
+    """Find a long straight pointer line that passes close to the dial hub.
+
+    The farther endpoint is treated as the pointer tip; a short counterweight on
+    the opposite side is therefore not mistaken for the measured direction.
+    Returns (angle_deg, line_length_px, centre_offset_px), or None.
+    """
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+    edges = cv2.Canny(blurred, 40, 120)
+    lines = cv2.HoughLinesP(
+        edges, 1, np.pi / 180,
+        threshold=max(25, int(radius * 0.20)),
+        minLineLength=max(30, int(radius * 0.35)),
+        maxLineGap=max(5, int(radius * 0.08)),
+    )
+    if lines is None:
+        return None
+
+    candidates = []
+    max_hub_offset = max(6.0, radius * 0.08)
+    for x1, y1, x2, y2 in lines[:, 0]:
+        vx, vy = float(x2 - x1), float(y2 - y1)
+        length = math.hypot(vx, vy)
+        denominator = vx * vx + vy * vy
+        if denominator <= 0:
+            continue
+
+        projection = max(
+            0.0,
+            min(1.0, ((cx - x1) * vx + (cy - y1) * vy) / denominator),
+        )
+        closest_x = x1 + projection * vx
+        closest_y = y1 + projection * vy
+        hub_offset = math.hypot(closest_x - cx, closest_y - cy)
+
+        distance_1 = math.hypot(x1 - cx, y1 - cy)
+        distance_2 = math.hypot(x2 - cx, y2 - cy)
+        far_endpoint = (x1, y1) if distance_1 >= distance_2 else (x2, y2)
+        far_distance = max(distance_1, distance_2)
+        near_distance = min(distance_1, distance_2)
+
+        # Reject dial markings and text: a pointer should cross near the hub,
+        # extend well into the dial, and have a clearly longer side than its counterweight.
+        if hub_offset > max_hub_offset:
+            continue
+        if far_distance < radius * 0.55:
+            continue
+        if far_distance - near_distance < radius * 0.12:
+            continue
+
+        score = (
+            length
+            + 0.50 * far_distance
+            + 0.25 * (far_distance - near_distance)
+            - 2.0 * hub_offset
+        )
+        angle = math.degrees(
+            math.atan2(far_endpoint[1] - cy, far_endpoint[0] - cx)
+        ) % 360.0
+        candidates.append((score, angle, length, hub_offset))
+
+    if not candidates:
+        return None
+    _, angle, length, hub_offset = max(candidates, key=lambda item: item[0])
+    return float(angle), float(length), float(hub_offset)
 
 
 def _detect_pointer_angle(gray, cx, cy, radius, start_angle, end_angle):
@@ -117,22 +194,33 @@ def read_analog_gauge(image_bytes, min_value, max_value, start_angle=135.0, end_
         minRadius=max(20, min(h, w) // 8), maxRadius=min(h, w) // 2
     )
     cx, cy, radius = _select_gauge_circle(circles, w, h)
-    pointer_angle, pointer_run, separation = _detect_pointer_angle(
-        gray, cx, cy, radius, start_angle, end_angle
-    )
-    value = angle_to_value(pointer_angle, min_value, max_value, start_angle, end_angle)
+    hough_result = _detect_pointer_angle_hough(gray, cx, cy, radius)
+    if hough_result is not None:
+        pointer_angle, pointer_length, hub_offset = hough_result
+        value = angle_to_value(pointer_angle, min_value, max_value, start_angle, end_angle)
+        confidence = "experimental" if pointer_length >= radius * 0.55 and hub_offset <= radius * 0.05 else "low"
+        diagnostics = {
+            "pointer_line_length_px": round(pointer_length, 2),
+            "pointer_hub_offset_px": round(hub_offset, 2),
+            "detection_method": "hough_center_crossing_line",
+        }
+    else:
+        pointer_angle, pointer_run, separation = _detect_pointer_angle(
+            gray, cx, cy, radius, start_angle, end_angle
+        )
+        value = angle_to_value(pointer_angle, min_value, max_value, start_angle, end_angle)
+        confidence = "experimental" if separation >= 5 and pointer_run >= 24 else "low"
+        diagnostics = {
+            "pointer_radial_run_px": pointer_run,
+            "direction_score_separation": separation,
+            "detection_method": "polar_radial_dark_run",
+        }
 
-    # Heuristic only: the score gap is not a statistically calibrated probability.
-    confidence = "experimental" if separation >= 5 and pointer_run >= 24 else "low"
     return {
         "value": round(value, 2),
         "pointer_angle_deg": round(pointer_angle, 2),
         "dial": {"center_x": round(cx, 1), "center_y": round(cy, 1), "radius": round(radius, 1)},
         "confidence": confidence,
-        "diagnostics": {
-            "pointer_radial_run_px": pointer_run,
-            "direction_score_separation": separation,
-            "detection_method": "polar_radial_dark_run",
-        },
-        "note": "Experimental radial pointer estimate; confidence is heuristic, not a probability. Verify against a calibrated reference.",
+        "diagnostics": diagnostics,
+        "note": "Experimental pointer estimate using line geometry or radial image segmentation. Confidence is heuristic, not a probability. Verify against a calibrated reference.",
     }
