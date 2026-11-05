@@ -6,6 +6,7 @@ from uuid import uuid4
 from datetime import datetime, timezone
 from vision import read_analog_gauge, GaugeReadError
 from digital_ocr import read_digital_display, DigitalReadError
+from storage import init_storage, load_jobs, save_job, list_readings
 import asyncio, csv, io, json, random, os, math
 
 app = FastAPI(title="RetroSense API", version="0.3.0")
@@ -14,6 +15,8 @@ app.add_middleware(CORSMiddleware, allow_origins=[x.strip() for x in os.getenv("
 STORE = Path("uploads")
 STORE.mkdir(exist_ok=True)
 JOBS = {}
+init_storage()
+JOBS.update(load_jobs())
 MAX_UPLOAD_BYTES = 12 * 1024 * 1024
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/bmp"}
 
@@ -115,12 +118,14 @@ async def create_job(file: UploadFile = File(...), machine_name: str = Form("Ins
     destination.write_bytes(data)
     JOBS[job_id] = {
         "job_id": job_id, "filename": safe_name, "path": str(destination),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "machine_name": machine_name, "mode": mode, "unit": unit,
         "min_value": min_value, "max_value": max_value,
         "warning_limit": warning_limit, "danger_limit": danger_limit,
         "start_angle": start_angle, "end_angle": end_angle,
         "readings": [], "status": "uploaded",
     }
+    save_job(JOBS[job_id])
     return {"job_id": job_id, "status": "uploaded", "filename": safe_name}
 
 
@@ -137,7 +142,13 @@ def start_job(job_id: str):
     except (GaugeReadError, DigitalReadError) as exc:
         job["status"] = "failed"
         job["error"] = str(exc)
+        save_job(job)
         raise HTTPException(422, str(exc)) from exc
+    except OSError as exc:
+        job["status"] = "failed"
+        job["error"] = "Uploaded image file is missing or unreadable; upload the image again."
+        save_job(job)
+        raise HTTPException(410, job["error"]) from exc
     value = float(result["value"])
     status = ("DANGER" if value >= job["danger_limit"] else
               "WARNING" if value >= job["warning_limit"] else "NORMAL")
@@ -146,6 +157,7 @@ def start_job(job_id: str):
     job["readings"].append(reading)
     job["latest_result"] = result
     job["status"] = "completed"
+    save_job(job)
     return {"job_id": job_id, "status": "completed", "reading": {
         "timestamp": stamp, "instrument": job["machine_name"], "value": value,
         "unit": job["unit"], "status": status, "mode": job["mode"],
@@ -165,6 +177,13 @@ def export_csv(job_id: str):
     output.seek(0)
     return StreamingResponse(iter([output.getvalue()]), media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="retrosense-{job_id}.csv"'})
+
+
+@app.get("/api/readings")
+def get_readings():
+    """Return readings persisted by this API instance's configured storage."""
+    items = list_readings()
+    return {"count": len(items), "readings": items}
 
 
 @app.websocket("/ws/jobs/{job_id}")
