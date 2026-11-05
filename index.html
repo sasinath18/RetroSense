@@ -19,14 +19,14 @@
     <a class="nav active" href="#overview">▦ <span>Overview</span></a>
     <a class="nav" href="#capture">◉ <span>New capture</span></a>
     <a class="nav" href="#history">▤ <span>Readings history</span></a>
-    <div class="side-bottom"><div class="connection"><i></i><span>LOCAL SYSTEM</span><b id="apiStatus">DEMO</b></div><p>RETROSENSE PROTOTYPE<br>v0.4.0 · BUILD 004</p></div>
+    <div class="side-bottom"><div class="connection"><i></i><span>API STATUS</span><b id="apiStatus">DEMO</b></div><p>RETROSENSE PROTOTYPE<br>v0.4.0 · BUILD 004</p></div>
   </aside>
   <main class="main" id="overview">
     <header class="topbar"><div><div class="eyebrow">INDUSTRIAL MONITORING / WORKSPACE</div><h1>Instrument overview</h1></div><div class="top-actions"><span class="live-pill is-pending" id="systemState" aria-live="polite"><i></i> CHECKING API</span><button class="btn btn-primary" onclick="document.querySelector('#capture').scrollIntoView({behavior:'smooth'})">＋ New capture</button></div></header>
     <section class="stats">
       <article class="stat"><span>ACTIVE INSTRUMENT</span><strong id="instrumentStat">01</strong><small>Connected session</small></article>
-      <article class="stat"><span>LATEST READING</span><strong><b id="latestStat">64.2</b> <em id="unitStat">PSI</em></strong><small id="readingTime">Waiting for data</small></article>
-      <article class="stat"><span>ALERT STATUS</span><strong class="status-normal" id="alertStat">NORMAL</strong><small>Threshold monitoring</small></article>
+      <article class="stat"><span>LATEST READING</span><strong><b id="latestStat">—</b> <em id="unitStat">PSI</em></strong><small id="readingTime">No image analyzed yet</small></article>
+      <article class="stat"><span>ALERT STATUS</span><strong class="status-normal" id="alertStat">WAITING</strong><small>Threshold monitoring</small></article>
       <article class="stat"><span>CAPTURE MODE</span><strong id="modeStat">ANALOG</strong><small>Image interpretation</small></article>
     </section>
     <section class="grid-main">
