@@ -40,6 +40,16 @@
       <article class="panel capture-panel" id="capture"><div class="panel-head"><div><div class="eyebrow">INPUT CONFIGURATION</div><h2>New instrument capture</h2></div><span class="step">01 / INPUT</span></div>
         <div class="mode-switch"><button class="mode active" data-mode="analog">◉ Analog gauge</button><button class="mode" data-mode="digital">▣ Digital display</button></div>
         <label class="dropzone" id="dropzone"><input id="fileInput" type="file" accept="image/jpeg,image/png,image/webp,image/bmp"><span class="upload-icon">↑</span><b>Drop an instrument image here</b><small>or <u>browse files</u> · JPG, PNG, WEBP, BMP</small><span id="fileName" class="file-name">No file selected</span></label>
+        <div class="camera-tools">
+          <button class="btn btn-ghost" id="cameraStart" type="button">◎ Open camera</button>
+          <button class="btn btn-ghost" id="cameraCapture" type="button" disabled>Capture frame</button>
+          <button class="btn btn-ghost" id="cameraStop" type="button" disabled>Close camera</button>
+        </div>
+        <div class="camera-panel" id="cameraPanel" hidden>
+          <video id="cameraVideo" autoplay muted playsinline aria-label="Live instrument camera preview"></video>
+          <canvas id="cameraCanvas" hidden></canvas>
+          <small id="cameraStatus" role="status">Camera is off.</small>
+        </div>
         <div class="form-grid"><label>INSTRUMENT NAME<input id="machineName" value="Boiler pressure gauge" placeholder="e.g. Boiler pressure"></label><label>UNIT<select id="unit"><option>PSI</option><option>bar</option><option>°C</option><option>kPa</option><option>V</option><option>A</option><option>%</option></select></label><label>MINIMUM VALUE<input id="minValue" type="number" value="0"></label><label>MAXIMUM VALUE<input id="maxValue" type="number" value="100"></label><label>WARNING ABOVE<input id="warningLimit" type="number" value="75"></label><label>DANGER ABOVE<input id="dangerLimit" type="number" value="90"></label><label>START ANGLE (DEG)<input id="startAngle" type="number" value="135" min="0" max="359"></label><label>END ANGLE (DEG)<input id="endAngle" type="number" value="45" min="0" max="359"></label></div>
         <button class="btn btn-primary btn-wide" id="analyzeBtn">Analyze instrument <span>→</span></button><p class="helper">Analog mode estimates a needle reading. Digital mode extracts numeric text using Tesseract OCR. Verify every result manually.</p>
       </article>
