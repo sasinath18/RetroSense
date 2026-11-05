@@ -73,6 +73,28 @@ def test_hough_detector_uses_long_pointer_side_not_short_counterweight():
     assert hub_offset <= radius * 0.08
 
 
+def test_hough_detector_prefers_thick_short_arrowhead_over_long_thin_tail():
+    size, center, radius = 400, (200, 200), 160
+
+    def point(angle, distance):
+        radians = np.deg2rad(angle)
+        return (int(center[0] + distance * np.cos(radians)),
+                int(center[1] + distance * np.sin(radians)))
+
+    image = np.full((size, size), 245, dtype=np.uint8)
+    # The thin balance tail extends farther than the thick reading pointer.
+    cv2.line(image, center, point(140, radius * 0.82), 15, 3)
+    cv2.line(image, center, point(320, radius * 0.52), 15, 9)
+
+    detected = _detect_pointer_angle_hough(image, *center, radius)
+
+    assert detected is not None
+    angle, line_length, hub_offset = detected
+    assert angle == pytest.approx(320, abs=3)
+    assert line_length >= radius * 0.35
+    assert hub_offset <= radius * 0.08
+
+
 def test_angle_mapping_snaps_small_pointer_error_to_scale_endpoint():
     assert angle_to_value(132, 0, 100, 135, 45) == pytest.approx(0)
     assert angle_to_value(48, 0, 100, 135, 45) == pytest.approx(100)
