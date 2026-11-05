@@ -167,7 +167,7 @@ function initChart(){
     context.clearRect(0,0,width,height);
     const values=emptyData.datasets[0].data.map(Number).filter(Number.isFinite);
     const min=values.length?Math.min(...values):0,max=values.length?Math.max(...values):100;
-    const spread=Math.max(max-min,1),low=Math.max(0,min-spread*.12),high=max+spread*.12;
+    const spread=Math.max(max-min,1),low=min-spread*.12,high=max+spread*.12;
     const left=42,right=12,top=12,bottom=28,plotW=width-left-right,plotH=height-top-bottom;
     context.font="10px Arial";context.textAlign="right";context.textBaseline="middle";
     for(let i=0;i<=4;i++){
@@ -357,7 +357,11 @@ async function openCamera(){
     cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false});
     video.srcObject=cameraStream;panel.hidden=false;await video.play();
     start.disabled=true;capture.disabled=false;stop.disabled=false;status.textContent="Camera is ready. Position the instrument and capture a frame.";
-  }catch(err){panel.hidden=false;status.textContent="Could not open camera: "+err.message+". Check browser camera permission or upload an image."}
+  }catch(err){
+    if(cameraStream){cameraStream.getTracks().forEach(track=>track.stop());cameraStream=null}
+    video.srcObject=null;start.disabled=false;capture.disabled=true;stop.disabled=true;
+    panel.hidden=false;status.textContent="Could not open camera: "+err.message+". Check browser camera permission or upload an image.";
+  }
 }
 function stopAutoCapture(){
   autoCaptureRequested=false;
