@@ -1,93 +1,70 @@
 # RetroSense
 
-AI-assisted digitization and monitoring for legacy industrial instruments.
+AI-assisted digitization of legacy industrial instruments from uploaded images.
 
-## Current prototype
-- Responsive dashboard with telemetry chart, alerts, history and CSV export
-- FastAPI backend
-- Experimental OpenCV analog-gauge baseline: circle detection + radial pointer segmentation
-- Experimental digital-display OCR using OpenCV preprocessing + Tesseract
-- Threshold-based NORMAL / WARNING / DANGER classification
-- Ground-truth evaluation utility for repeatable gauge-image testing
+## Prototype capabilities
+
+- Responsive dashboard with reading trend, threshold alerts, history and CSV export
+- FastAPI backend with upload validation and health endpoint
+- Experimental OpenCV analog-gauge pointer estimation
+- Experimental digital-display OCR using OpenCV preprocessing and Tesseract
+- NORMAL / WARNING / DANGER threshold classification
+- Automated backend tests with GitHub Actions
 
 ## Run locally
-```bash
+
+Requires Python 3.11+.
+
+### 1. Start the API (Windows PowerShell)
+
+```powershell
 cd backend
-python -m venv .venv
-# Windows: .venv\\Scripts\\activate
-# macOS/Linux: source .venv/bin/activate
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 pip install -r requirements.txt
-uvicorn main:app --reload
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
-Open `http://127.0.0.1:8000/docs` to test the API. Open `index.html` using a local static server (for example `python -m http.server 5500` from the repository root).
 
-## Analog image analysis
-`POST /api/analyze` accepts multipart fields:
-- `file`: JPG, PNG, WEBP or BMP (max 12 MB)
-- `mode=analog`
-- `min_value`, `max_value`
-- `start_angle`, `end_angle` in image coordinates (degrees; defaults 135° to 45°)
+### 2. Start the dashboard in a second terminal
 
-The current baseline applies CLAHE local-contrast enhancement, Hough circle detection, centre-biased dial-circle selection, polar radial sampling, adaptive dark-pixel thresholding and longest-contiguous-run scoring within the calibrated sweep. The centre-biased circle selector rejects large off-centre background arcs that previously caused incorrect dial-centre selection.
+From the repository root:
 
-The pointer estimator now samples radial rays through the dial interior and scores the longest continuous dark segment, excluding most outer tick marks. This is designed to prefer the long reading needle over a shorter counterweight, and includes a synthetic regression test for that geometry. The returned confidence label is heuristic, not a probability. It can still confuse dark printed graphics, thick tick marks, screws, or reflections with a needle, and it does not yet identify the pointer's physical tip using a trained vision model. It may also fail on glare, perspective distortion, thick or curved pointers, occlusion, unusual dial geometry, dual-scale faces or cluttered backgrounds. A successful API response is not proof of a correct reading. Validate against known reference readings and calibrate angles for each instrument before relying on the result.
-
-## Ground-truth evaluation
-Use `backend/evaluate_samples.py` to compare algorithm outputs with independently verified readings. Create a CSV manifest with these required columns:
-`image,min_value,max_value,expected_value`
-Optional columns: `unit,start_angle,end_angle`. Relative image paths are resolved from the CSV file's directory. Leave `expected_value` blank when no reference reading is available; that sample is analysed but excluded from accuracy metrics.
-
-Example manifest:
-```csv
-image,min_value,max_value,expected_value,unit,start_angle,end_angle
-gauge_a.jpg,0,200,0,kg/cm2,135,45
-gauge_b.jpg,0,7,0,kg/cm2,135,45
-gauge_c.jpg,0,250,,mbar,135,45
+```powershell
+py -m http.server 5500
 ```
-Run from the backend directory:
-```bash
-python evaluate_samples.py samples.csv --output evaluation.json
-```
-The report includes per-image estimates and MAE, RMSE and MAPE. MAPE excludes zero reference values because percentage error is undefined at zero. Do not use guessed readings as ground truth.
 
-Three user-supplied gauge photos were previously used for an initial smoke check. Those outputs were not independently verified; therefore no real-world MAE, MAPE or success rate is claimed. The sample photos are not stored in this repository.
+Open `http://localhost:5500`. The local dashboard automatically targets the API at `http://127.0.0.1:8000`.
 
-## Digital display OCR
-Job creation validates image type, non-empty content, a 12 MB upload limit, mode, range and thresholds. Starting a job now performs a single analysis of the stored image and records the result for CSV export. The WebSocket remains explicitly simulated demo telemetry; it is not connected to a live camera or physical sensor.\n\nThe dashboard's **Digital display** mode calls `POST /api/analyze` with `mode=digital`. The backend uses OpenCV grayscale/CLAHE/upscaling/Otsu preprocessing followed by Tesseract OCR, restricted to numeric characters and decimal/sign symbols. The API returns the selected numeric token, raw recognized token, Tesseract token confidence (0–100), and a warning to verify the reading.
+API health: `http://127.0.0.1:8000/api/health`
+API docs: `http://127.0.0.1:8000/docs`
 
-Python dependency installation:
-```bash
-pip install -r requirements.txt
-```
-Tesseract is a separate system executable and must also be installed:
-- Windows: install the Tesseract OCR Windows package and add its installation directory to PATH.
+For macOS/Linux, create the virtual environment with `python3 -m venv .venv` and activate it with `source .venv/bin/activate`.
+
+## Digital OCR setup
+
+Digital mode also requires the Tesseract system executable:
+- Windows: install Tesseract OCR and add its installation directory to PATH.
 - Ubuntu/Debian: `sudo apt-get install tesseract-ocr`
-- macOS with Homebrew: `brew install tesseract`
+- macOS: `brew install tesseract`
 
-Restart the FastAPI server after installing Tesseract. If the executable is missing, digital mode returns a clear HTTP 422 error; analog mode remains available. OCR can misread seven-segment digits, decimal points, reflections, units and multi-field displays. It currently selects the highest-confidence numeric token; it does not yet support region-of-interest selection, unit recognition, multi-value displays or temporal stabilization. Tesseract confidence is text-recognition confidence, not measurement accuracy. Verify every reading manually.
+Verify with `tesseract --version`.
 
-Video processing is not implemented yet.
+## Deployment
 
-## Tests
-Run from the `backend` directory:
-```bash
-pytest -q
-```
-Tests cover angle-to-value mapping, invalid calibration, central dial-circle selection, synthetic long-needle versus short-counterweight detection, blank-dial rejection, evaluation metrics and digital OCR parsing/error handling (with Tesseract mocked). They do not establish real-world reading accuracy.
+- GitHub Pages hosts the static dashboard only.
+- Render hosts the FastAPI backend using the root `render.yaml` blueprint.
+- After deploying the backend, set `window.RETROSENSE_API_URL` in the dashboard to the Render service URL before publishing the frontend. The Pages workflow deploys the repository root.
 
-## API
-- `GET /api/health`
-- `POST /api/analyze`
-- `POST /api/jobs`
-- `POST /api/jobs/{job_id}/start` (runs one analysis on the uploaded image and stores the result)
-- `GET /api/jobs/{job_id}/export.csv`
-- `WS /ws/jobs/{job_id}` (simulated demo telemetry only; not a live camera or sensor feed)
+## API and validation
 
-## Safety
-Academic prototype only. Not certified for safety-critical monitoring or control. Never use its output as the sole basis for industrial decisions.
+See [backend/README.md](backend/README.md) for endpoints and deployment notes. The backend CI workflow runs pytest on pushes and pull requests.
 
+## Known limitations — not production-ready
 
-## Frontend API configuration
-The dashboard uses the same origin as its API when hosted together. If the static frontend is hosted separately (for example, GitHub Pages), set `window.RETROSENSE_API_URL` in the small configuration script immediately before `app.js` in `index.html` to the deployed FastAPI base URL (for example, `https://your-api-host.example`, with no trailing slash). The API host must allow the frontend origin through its CORS configuration. For local development, the default API is `http://127.0.0.1:8000`.
-
-The dashboard intentionally starts with an empty reading state. It no longer invents a startup reading or silently appends synthetic values to the history. Only uploaded-image analysis is represented as an analysed reading. The WebSocket demo stream is separate and explicitly emits `source: simulated_demo`; it must not be presented as physical sensor telemetry.
+- Analysis is single-image upload based; live camera streaming and physical sensor integration are not implemented.
+- WebSocket output is simulated demo telemetry, not real sensor data.
+- Analog gauge detection and digital OCR are experimental; successful processing does not guarantee a correct measurement.
+- Digital OCR currently selects one numeric token and may misread seven-segment displays, decimal points or multi-field screens.
+- Jobs are held in process memory and uploaded files are on local disk. Durable storage, authentication, multi-user isolation, monitoring and production security hardening remain future work.
+- Calibrate each instrument and compare outputs against independently verified ground-truth readings before any operational use.
