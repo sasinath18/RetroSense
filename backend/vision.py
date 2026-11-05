@@ -66,6 +66,46 @@ def _longest_true_run(mask):
     return int(np.max(ends - starts)) if len(starts) else 0
 
 
+def _radial_dark_width_score(gray, cx, cy, radius, angle):
+    """Estimate how thick the pointer shaft/head is along one side of its axis.
+
+    A counterweight tail can be longer than the arrowhead. Sampling a set of
+    cross-sections close to the hub helps choose the broader reading-pointer side.
+    """
+    theta = math.radians(angle)
+    ux, uy = math.cos(theta), math.sin(theta)
+    px, py = -uy, ux
+    half_width = max(6, int(radius * 0.10))
+    offsets = range(-half_width, half_width + 1)
+    widths = []
+
+    for distance in np.linspace(radius * 0.22, radius * 0.46, 9):
+        x0, y0 = cx + distance * ux, cy + distance * uy
+        mask = []
+        for offset in offsets:
+            x = int(round(x0 + offset * px))
+            y = int(round(y0 + offset * py))
+            mask.append(
+                0 <= x < gray.shape[1]
+                and 0 <= y < gray.shape[0]
+                and gray[y, x] < 120
+            )
+
+        middle = half_width
+        if not mask[middle]:
+            widths.append(0)
+            continue
+        left = middle
+        while left > 0 and mask[left - 1]:
+            left -= 1
+        right = middle
+        while right + 1 < len(mask) and mask[right + 1]:
+            right += 1
+        widths.append(right - left + 1)
+
+    return float(np.mean(widths)) if widths else 0.0
+
+
 def _detect_pointer_angle_hough(gray, cx, cy, radius):
     """Find a long straight pointer line that passes close to the dial hub.
 
@@ -103,28 +143,46 @@ def _detect_pointer_angle_hough(gray, cx, cy, radius):
 
         distance_1 = math.hypot(x1 - cx, y1 - cy)
         distance_2 = math.hypot(x2 - cx, y2 - cy)
-        far_endpoint = (x1, y1) if distance_1 >= distance_2 else (x2, y2)
         far_distance = max(distance_1, distance_2)
         near_distance = min(distance_1, distance_2)
 
-        # Reject dial markings and text: a pointer should cross near the hub,
-        # extend well into the dial, and have a clearly longer side than its counterweight.
+        # Reject dial markings and text. The arrowhead can be shorter than its
+        # thin counterweight tail, so do not require the longer side to reach
+        # 55% of the radius.
         if hub_offset > max_hub_offset:
             continue
-        if far_distance < radius * 0.55:
+        if far_distance < radius * 0.30:
             continue
         if far_distance - near_distance < radius * 0.12:
             continue
+
+        angle_1 = math.degrees(math.atan2(y1 - cy, x1 - cx)) % 360.0
+        angle_2 = math.degrees(math.atan2(y2 - cy, x2 - cx)) % 360.0
+        width_1 = _radial_dark_width_score(gray, cx, cy, radius, angle_1)
+        width_2 = _radial_dark_width_score(gray, cx, cy, radius, angle_2)
+        width_margin = abs(width_1 - width_2)
+        wider_side_is_clear = width_margin >= max(0.8, max(width_1, width_2) * 0.14)
+
+        if wider_side_is_clear:
+            # The thicker side is usually the actual pointer blade; the opposite
+            # side is often a narrow balance tail that extends farther.
+            angle = angle_1 if width_1 > width_2 else angle_2
+            direction_width = max(width_1, width_2)
+        else:
+            # On symmetric or very thin needles, retain the geometric fallback.
+            far_endpoint = (x1, y1) if distance_1 >= distance_2 else (x2, y2)
+            angle = math.degrees(
+                math.atan2(far_endpoint[1] - cy, far_endpoint[0] - cx)
+            ) % 360.0
+            direction_width = max(width_1, width_2)
 
         score = (
             length
             + 0.50 * far_distance
             + 0.25 * (far_distance - near_distance)
             - 2.0 * hub_offset
+            + 2.0 * direction_width
         )
-        angle = math.degrees(
-            math.atan2(far_endpoint[1] - cy, far_endpoint[0] - cx)
-        ) % 360.0
         candidates.append((score, angle, length, hub_offset))
 
     if not candidates:
