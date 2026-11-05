@@ -8,6 +8,8 @@ from vision import read_analog_gauge, GaugeReadError
 from digital_ocr import read_digital_display, DigitalReadError
 from storage import init_storage, load_jobs, save_job, list_readings
 import asyncio, csv, io, json, random, os, math, secrets
+import cv2
+import numpy as np
 
 app = FastAPI(title="RetroSense API", version="0.3.0")
 app.add_middleware(CORSMiddleware, allow_origins=[x.strip() for x in os.getenv("CORS_ORIGINS", "*").split(",") if x.strip()], allow_credentials=False,
@@ -76,6 +78,19 @@ async def _read_upload(file: UploadFile):
     return data
 
 
+
+MAX_IMAGE_PIXELS = 20_000_000
+
+
+def _validate_image_bytes(data: bytes):
+    """Reject spoofed image MIME types and excessive decoded image dimensions."""
+    image = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        raise HTTPException(415, "The uploaded file is not a valid supported image.")
+    height, width = image.shape[:2]
+    if height * width > MAX_IMAGE_PIXELS:
+        raise HTTPException(413, "Image dimensions exceed the 20 megapixel limit.")
+
 def _analyse_job(job):
     data = Path(job["path"]).read_bytes()
     if job["mode"] == "digital":
@@ -96,6 +111,7 @@ async def analyze_image(file: UploadFile = File(...), mode: str = Form("analog")
     _validate_upload(file, mode)
     _validate_numeric_settings(mode, min_value, max_value, start_angle, end_angle)
     data = await _read_upload(file)
+    _validate_image_bytes(data)
     try:
         if mode == "digital":
             return {**read_digital_display(data), "mode": "digital"}
@@ -122,6 +138,7 @@ async def create_job(file: UploadFile = File(...), machine_name: str = Form("Ins
     if len(unit) > 16:
         raise HTTPException(400, "unit must be 16 characters or fewer")
     data = await _read_upload(file)
+    _validate_image_bytes(data)
     job_id = str(uuid4())
     destination = STORE / f"{job_id}_{safe_name}"
     destination.write_bytes(data)
