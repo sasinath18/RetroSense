@@ -83,7 +83,7 @@ See [backend/README.md](backend/README.md) for endpoints and deployment notes. T
 
 ## Known limitations — not production-ready
 
-- Analysis supports uploaded images and optional browser camera frame capture. It captures one still frame per click; continuous live-video analysis is not implemented.
+- Analysis supports uploaded images, manual browser camera capture and optional five-second automatic still-frame sampling. This repeatedly uploads snapshots; it is not a continuous video stream.
 - Physical sensor integration is not implemented.
 - WebSocket output is simulated demo telemetry, not real sensor data.
 - Analog gauge detection and digital OCR are experimental; successful processing does not guarantee a correct measurement.
