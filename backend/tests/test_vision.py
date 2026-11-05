@@ -1,6 +1,10 @@
+import cv2
 import numpy as np
 import pytest
-from vision import angle_to_value, GaugeReadError, _select_gauge_circle
+from vision import (
+    angle_to_value, GaugeReadError, _select_gauge_circle,
+    _detect_pointer_angle,
+)
 from evaluate_samples import calculate_metrics
 
 
@@ -39,6 +43,27 @@ def test_circle_selection_rejects_no_central_candidate():
     circles = np.array([[[20.0, 30.0, 300.0]]], dtype=np.float32)
     with pytest.raises(GaugeReadError):
         _select_gauge_circle(circles, 1000, 1000)
+
+
+def test_radial_detector_finds_needle_tip_not_short_counterweight():
+    size, center, radius = 400, (200, 200), 160
+    image = np.full((size, size), 245, dtype=np.uint8)
+    # Long pointer at 220 degrees; short counterweight points in the opposite direction.
+    def point(angle, distance):
+        radians = np.deg2rad(angle)
+        return (int(center[0] + distance * np.cos(radians)),
+                int(center[1] + distance * np.sin(radians)))
+    cv2.line(image, point(220, radius * .12), point(220, radius * .76), 15, 7)
+    cv2.line(image, point(40, radius * .12), point(40, radius * .30), 15, 5)
+    angle, run, separation = _detect_pointer_angle(image, *center, radius, 135, 45)
+    assert angle == pytest.approx(220, abs=2)
+    assert run >= 24
+
+
+def test_radial_detector_rejects_image_without_pointer():
+    image = np.full((300, 300), 245, dtype=np.uint8)
+    with pytest.raises(GaugeReadError):
+        _detect_pointer_angle(image, 150, 150, 120, 135, 45)
 
 
 def test_accuracy_metrics_calculate_mae_rmse_and_mape():
