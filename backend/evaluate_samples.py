@@ -96,7 +96,7 @@ def main():
     report = evaluate_manifest(args.manifest)
     rendered = json.dumps(report, indent=2)
     if args.output:
-        Path(args.output).write_text(rendered + "\\n", encoding="utf-8")
+        Path(args.output).write_text(rendered + "\n", encoding="utf-8")
     print(rendered)
 
 
