@@ -1,5 +1,6 @@
 const $=s=>document.querySelector(s);let mode="analog",selectedFile=null,jobId=null,history=[],alerts=[],samples=[],chart;
-let cameraStream=null;\nconst isLocalHost=["localhost","127.0.0.1"].includes(location.hostname);
+let cameraStream=null;
+const isLocalHost=["localhost","127.0.0.1"].includes(location.hostname);
 const configuredApi=String(window.RETROSENSE_API_URL||"").trim();
 // Local development uses the local FastAPI server. A deployed dashboard must be
 // explicitly pointed at its Render API instead of incorrectly calling GitHub Pages.
