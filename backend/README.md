@@ -52,6 +52,14 @@ Digital mode requires the Tesseract executable in addition to the Python package
 
 Check installation with `tesseract --version`.
 
+## Reading interpretation and calibration
+
+- Analog mode detects the dial circle, then looks for a long straight pointer line crossing near the hub. The farther endpoint is treated as the needle tip so a short counterweight is less likely to be selected. If the line candidate falls outside the configured scale, the radial detector is used as a fallback.
+- The analog reader accepts a small 5-degree endpoint tolerance to absorb minor image-detection error. This does not replace correct instrument calibration.
+- Set minimum and maximum to the actual printed instrument range, and calibrate the start/end angles for each gauge. The dashboard defaults are examples, not universal calibration values.
+- Digital mode tries Tesseract page-segmentation modes 6, 7, 8 and 13. If they return different numeric values, the API sets `ambiguous=true`, supplies `candidate_values`, and the dashboard warns the operator. Always verify the displayed digits manually.
+- Tesseract confidence is a text-recognition score, not a measurement-accuracy probability.
+
 ## Accuracy evaluation
 
 The repository includes two command-line evaluation tools:
