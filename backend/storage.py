@@ -87,6 +87,7 @@ def list_readings():
         for reading in job.get("readings", []):
             if len(reading) < 5:
                 continue
+            analysis = job.get("latest_result") or {}
             readings.append({
                 "timestamp": reading[0],
                 "instrument": reading[1],
@@ -95,6 +96,15 @@ def list_readings():
                 "status": reading[4],
                 "mode": job.get("mode"),
                 "job_id": job["job_id"],
+                "min_value": job.get("min_value"),
+                "max_value": job.get("max_value"),
+                "warning_limit": job.get("warning_limit"),
+                "danger_limit": job.get("danger_limit"),
+                "start_angle": job.get("start_angle"),
+                "end_angle": job.get("end_angle"),
+                "confidence": analysis.get("confidence"),
+                "ambiguous": bool(analysis.get("ambiguous", False)),
+                "analysis_note": analysis.get("note", ""),
             })
     readings.sort(key=lambda row: row["timestamp"], reverse=True)
     return readings
