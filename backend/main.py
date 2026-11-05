@@ -6,7 +6,7 @@ from uuid import uuid4
 from datetime import datetime, timezone
 from vision import read_analog_gauge, GaugeReadError
 from digital_ocr import read_digital_display, DigitalReadError
-import asyncio, csv, io, json, random, os
+import asyncio, csv, io, json, random, os, math
 
 app = FastAPI(title="RetroSense API", version="0.3.0")
 app.add_middleware(CORSMiddleware, allow_origins=[x.strip() for x in os.getenv("CORS_ORIGINS", "*").split(",") if x.strip()], allow_credentials=False,
@@ -17,6 +17,32 @@ JOBS = {}
 MAX_UPLOAD_BYTES = 12 * 1024 * 1024
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/bmp"}
 
+
+
+def _validate_numeric_settings(mode, min_value, max_value, start_angle, end_angle,
+                               warning_limit=None, danger_limit=None):
+    values = {
+        "min_value": min_value, "max_value": max_value,
+        "start_angle": start_angle, "end_angle": end_angle,
+    }
+    if warning_limit is not None:
+        values["warning_limit"] = warning_limit
+    if danger_limit is not None:
+        values["danger_limit"] = danger_limit
+    for name, value in values.items():
+        if not math.isfinite(float(value)):
+            raise HTTPException(400, f"{name} must be a finite number")
+    if mode == "analog":
+        if max_value <= min_value:
+            raise HTTPException(400, "max_value must be greater than min_value")
+        if not (0 <= start_angle < 360 and 0 <= end_angle < 360):
+            raise HTTPException(400, "Calibration angles must be between 0 and 359 degrees")
+        sweep = (end_angle - start_angle) % 360
+        if sweep < 1 or sweep > 359:
+            raise HTTPException(400, "Calibration angle sweep is invalid")
+    if warning_limit is not None and danger_limit is not None:
+        if danger_limit < warning_limit:
+            raise HTTPException(400, "danger_limit must be >= warning_limit")
 
 def _validate_upload(file: UploadFile, mode: str):
     if mode not in ("analog", "digital"):
@@ -56,8 +82,7 @@ async def analyze_image(file: UploadFile = File(...), mode: str = Form("analog")
                         min_value: float = Form(0), max_value: float = Form(100),
                         start_angle: float = Form(135), end_angle: float = Form(45)):
     _validate_upload(file, mode)
-    if mode == "analog" and max_value <= min_value:
-        raise HTTPException(400, "max_value must be greater than min_value")
+    _validate_numeric_settings(mode, min_value, max_value, start_angle, end_angle)
     data = await _read_upload(file)
     try:
         if mode == "digital":
@@ -75,19 +100,22 @@ async def create_job(file: UploadFile = File(...), machine_name: str = Form("Ins
                      warning_limit: float = Form(75), danger_limit: float = Form(90),
                      start_angle: float = Form(135), end_angle: float = Form(45)):
     safe_name = _validate_upload(file, mode)
-    if mode == "analog" and max_value <= min_value:
-        raise HTTPException(400, "max_value must be greater than minimum value")
-    if danger_limit < warning_limit:
-        raise HTTPException(400, "danger_limit must be >= warning_limit")
-    if not machine_name.strip():
+    _validate_numeric_settings(mode, min_value, max_value, start_angle, end_angle,
+                               warning_limit, danger_limit)
+    machine_name = (machine_name or "").strip()
+    if not machine_name:
         raise HTTPException(400, "machine_name cannot be empty")
+    if len(machine_name) > 80:
+        raise HTTPException(400, "machine_name must be 80 characters or fewer")
+    if len(unit) > 16:
+        raise HTTPException(400, "unit must be 16 characters or fewer")
     data = await _read_upload(file)
     job_id = str(uuid4())
     destination = STORE / f"{job_id}_{safe_name}"
     destination.write_bytes(data)
     JOBS[job_id] = {
         "job_id": job_id, "filename": safe_name, "path": str(destination),
-        "machine_name": machine_name.strip(), "mode": mode, "unit": unit,
+        "machine_name": machine_name, "mode": mode, "unit": unit,
         "min_value": min_value, "max_value": max_value,
         "warning_limit": warning_limit, "danger_limit": danger_limit,
         "start_angle": start_angle, "end_angle": end_angle,
