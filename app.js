@@ -1,5 +1,6 @@
 const $=s=>document.querySelector(s);let mode="analog",selectedFile=null,jobId=null,history=[],alerts=[],samples=[],chart;
-const api=(window.RETROSENSE_API_URL||((location.protocol==="http:"||location.protocol==="https:")?location.origin:"http://127.0.0.1:8000")).replace(/\\/$/,"");
+const defaultApi=["localhost","127.0.0.1"].includes(location.hostname)?"http://127.0.0.1:8000":location.origin;
+const api=(window.RETROSENSE_API_URL||defaultApi).replace(/\/$/,"");
 const now=()=>new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
 function config(){return{min:Number($("#minValue").value)||0,max:Number($("#maxValue").value)||100,warning:Number($("#warningLimit").value)||75,danger:Number($("#dangerLimit").value)||90,unit:$("#unit").value,name:$("#machineName").value||"Instrument"}}
 function status(v,c){return v>=c.danger?"DANGER":v>=c.warning?"WARNING":"NORMAL"}
