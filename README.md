@@ -27,9 +27,9 @@ Open `http://127.0.0.1:8000/docs` to test the API. Open `index.html` using a loc
 - `min_value`, `max_value`
 - `start_angle`, `end_angle` in image coordinates (degrees; defaults 135° to 45°)
 
-The current baseline applies CLAHE local-contrast enhancement, Hough circle detection, centre-biased dial-circle selection, edge/line detection, calibrated-arc filtering and a centre-proximity/length heuristic to rank pointer candidates. The centre-biased circle selector rejects large off-centre background arcs that previously caused incorrect dial-centre selection.
+The current baseline applies CLAHE local-contrast enhancement, Hough circle detection, centre-biased dial-circle selection, polar radial sampling, adaptive dark-pixel thresholding and longest-contiguous-run scoring within the calibrated sweep. The centre-biased circle selector rejects large off-centre background arcs that previously caused incorrect dial-centre selection.
 
-The returned confidence label is heuristic, not a probability. The current line-based method does not reliably distinguish a pointer's reading tip from its counterweight/tail, and can confuse long tick marks or dial graphics with the pointer. It may also fail on glare, perspective distortion, thick or curved pointers, occlusion, unusual dial geometry, dual-scale faces or cluttered backgrounds. A successful API response is not proof of a correct reading. Validate against known reference readings and calibrate angles for each instrument before relying on the result.
+The pointer estimator now samples radial rays through the dial interior and scores the longest continuous dark segment, excluding most outer tick marks. This is designed to prefer the long reading needle over a shorter counterweight, and includes a synthetic regression test for that geometry. The returned confidence label is heuristic, not a probability. It can still confuse dark printed graphics, thick tick marks, screws, or reflections with a needle, and it does not yet identify the pointer's physical tip using a trained vision model. It may also fail on glare, perspective distortion, thick or curved pointers, occlusion, unusual dial geometry, dual-scale faces or cluttered backgrounds. A successful API response is not proof of a correct reading. Validate against known reference readings and calibrate angles for each instrument before relying on the result.
 
 ## Ground-truth evaluation
 Use `backend/evaluate_samples.py` to compare algorithm outputs with independently verified readings. Create a CSV manifest with these required columns:
@@ -58,7 +58,7 @@ Run from the `backend` directory:
 ```bash
 pytest -q
 ```
-Tests cover angle-to-value mapping, invalid calibration, central dial-circle selection and evaluation metric calculations. They do not establish real-world reading accuracy.
+Tests cover angle-to-value mapping, invalid calibration, central dial-circle selection, synthetic long-needle versus short-counterweight detection, blank-dial rejection and evaluation metric calculations. They do not establish real-world reading accuracy.
 
 ## API
 - `GET /api/health`
