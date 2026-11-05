@@ -85,3 +85,9 @@ Tests cover angle-to-value mapping, invalid calibration, central dial-circle sel
 
 ## Safety
 Academic prototype only. Not certified for safety-critical monitoring or control. Never use its output as the sole basis for industrial decisions.
+
+
+## Frontend API configuration
+The dashboard uses the same origin as its API when hosted together. If the static frontend is hosted separately (for example, GitHub Pages), set `window.RETROSENSE_API_URL` in the small configuration script immediately before `app.js` in `index.html` to the deployed FastAPI base URL (for example, `https://your-api-host.example`, with no trailing slash). The API host must allow the frontend origin through its CORS configuration. For local development, the default API is `http://127.0.0.1:8000`.
+
+The dashboard intentionally starts with an empty reading state. It no longer invents a startup reading or silently appends synthetic values to the history. Only uploaded-image analysis is represented as an analysed reading. The WebSocket demo stream is separate and explicitly emits `source: simulated_demo`; it must not be presented as physical sensor telemetry.
