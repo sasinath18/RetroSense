@@ -76,7 +76,7 @@ function updateGauge(value,c){
   needle.style.filter="drop-shadow(0 0 3px rgba(233,242,247,.35))";
   arc.style.strokeDashoffset=383.3*(1-pct);
   arc.style.opacity="1";
-  arc.style.filter="drop-shadow(0 0 5px currentColor)";
+  arc.style.filter="drop-shadow(0 0 5px rgba(83,214,208,.35))";
   state.textContent="READING";
   $("#minLabel").textContent=c.min;
   $("#maxLabel").textContent=c.max;
