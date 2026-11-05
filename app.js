@@ -9,10 +9,38 @@ const now=()=>new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",
 function config(){return{min:Number($("#minValue").value)||0,max:Number($("#maxValue").value)||100,warning:Number($("#warningLimit").value)||75,danger:Number($("#dangerLimit").value)||90,unit:$("#unit").value,name:$("#machineName").value||"Instrument"}}
 function status(v,c){return v>=c.danger?"DANGER":v>=c.warning?"WARNING":"NORMAL"}
 function addReading(v){const c=config(),s=status(v,c),t=now();$("#latestStat").textContent=v.toFixed(1);$("#unitStat").textContent=c.unit;$("#gaugeValue").textContent=v.toFixed(1);$("#gaugeUnit").textContent=c.unit;$("#updatedLabel").textContent=t;$("#readingTime").textContent="Updated at "+t;$("#instrumentStat").textContent="01";$("#modeStat").textContent=mode.toUpperCase();$("#alertStat").textContent=s;$("#alertStat").className=s==="NORMAL"?"status-normal":"";$("#alertStat").style.color=s==="DANGER"?"var(--red)":s==="WARNING"?"var(--amber)":"var(--green)";$("#minLabel").textContent=c.min;$("#maxLabel").textContent=c.max;const pct=Math.max(0,Math.min(1,(v-c.min)/(c.max-c.min||1)));$("#needle").style.transform=`rotate(${-135+pct*270}deg)`;$("#gaugeArc").style.strokeDashoffset=383.3*(1-pct);$("#gaugeArc").style.stroke=s==="DANGER"?"var(--red)":s==="WARNING"?"var(--amber)":"var(--cyan)";
-const row={time:new Date().toISOString(),displayTime:t,name:c.name,value:v,unit:c.unit,status:s};history.unshift(row);history=history.slice(0,100);renderHistory();samples.push({x:t,y:v});samples=samples.slice(-20);chart.data.labels=samples.map(x=>x.x);chart.data.datasets[0].data=samples.map(x=>x.y);chart.update("none");if(s!=="NORMAL"&&(!alerts.length||alerts[0].status!==s)){alerts.unshift(row);renderAlerts()}}
+const row={time:new Date().toISOString(),displayTime:t,name:c.name,value:v,unit:c.unit,status:s};history.unshift(row);history=history.slice(0,100);renderHistory();samples.push({x:t,y:v});samples=samples.slice(-20);chart.data.labels=samples.map(x=>x.x);chart.data.datasets[0].data=samples.map(x=>x.y);chart.update("none");if(s!=="NORMAL"&&(!alerts.length||alerts[0].status!==s)){alerts.unshift(row);renderAlerts()}persistDashboardState()}
 function renderHistory(){$("#historyBody").innerHTML=history.length?history.slice(0,12).map(r=>`<tr><td>${r.displayTime}</td><td>${escapeHtml(r.name)}</td><td>${r.value.toFixed(1)}</td><td>${r.unit}</td><td><span class="pill-status ${r.status.toLowerCase()}">${r.status}</span></td></tr>`).join(""):'<tr><td colspan="5" class="empty">No readings yet.</td></tr>'}
 function renderAlerts(){$("#alertCount").textContent=alerts.length+" EVENTS";$("#alerts").innerHTML=alerts.length?alerts.slice(0,8).map(a=>`<div class="alert-row ${a.status.toLowerCase()}"><i class="alert-dot"></i><div><b>${a.status}: ${a.value.toFixed(1)} ${a.unit}</b><small>${a.displayTime} · ${escapeHtml(a.name)}</small></div></div>`).join(""):'<div class="empty">No alerts detected. System is monitoring.</div>'}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+
+const STORAGE_KEY="retrosense.dashboard.v1";
+function persistDashboardState(){
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify({history:history.slice(0,100),alerts:alerts.slice(0,100)}))}
+  catch(err){console.warn("RetroSense could not save local dashboard history:",err)}
+}
+function restoreDashboardState(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
+    const valid=row=>row&&Number.isFinite(Number(row.value))&&typeof row.displayTime==="string"&&typeof row.name==="string";
+    history=Array.isArray(saved.history)?saved.history.filter(valid).slice(0,100):[];
+    alerts=Array.isArray(saved.alerts)?saved.alerts.filter(valid).slice(0,100):[];
+  }catch(err){history=[];alerts=[];console.warn("RetroSense local history could not be read:",err)}
+  renderHistory();renderAlerts();
+  if(!history.length)return;
+  const latest=history[0],c=config(),value=Number(latest.value),s=latest.status;
+  $("#latestStat").textContent=value.toFixed(1);$("#unitStat").textContent=latest.unit||c.unit;
+  $("#gaugeValue").textContent=value.toFixed(1);$("#gaugeUnit").textContent=latest.unit||c.unit;
+  $("#readingTime").textContent="Restored from this browser · "+latest.displayTime;
+  $("#updatedLabel").textContent=latest.displayTime;$("#instrumentStat").textContent="01";
+  $("#modeStat").textContent=mode.toUpperCase();$("#alertStat").textContent=s||"UNKNOWN";
+  $("#alertStat").style.color=s==="DANGER"?"var(--red)":s==="WARNING"?"var(--amber)":"var(--green)";
+  const pct=Math.max(0,Math.min(1,(value-c.min)/(c.max-c.min||1)));
+  $("#needle").style.transform=`rotate(${-135+pct*270}deg)`;
+  $("#gaugeArc").style.strokeDashoffset=383.3*(1-pct);
+  samples=history.slice(0,20).reverse().map(r=>({x:r.displayTime,y:Number(r.value)}));
+  chart.data.labels=samples.map(x=>x.x);chart.data.datasets[0].data=samples.map(x=>x.y);chart.update("none");
+}
 function initChart(){const ctx=$("#trendChart");chart=new Chart(ctx,{type:"line",data:{labels:[],datasets:[{data:[],borderColor:"#53d6d0",backgroundColor:"rgba(83,214,208,.08)",fill:true,tension:.35,pointRadius:2,pointBackgroundColor:"#53d6d0",borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:"rgba(130,150,170,.08)"},ticks:{color:"#718293",maxTicksLimit:6,font:{size:9}}},y:{grid:{color:"rgba(130,150,170,.1)"},ticks:{color:"#718293",font:{size:9}}}}}})}
 document.querySelectorAll(".mode").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll(".mode").forEach(x=>x.classList.remove("active"));b.classList.add("active");mode=b.dataset.mode;$("#modeStat").textContent=mode.toUpperCase()}));
 $("#fileInput").addEventListener("change",e=>{selectedFile=e.target.files[0];$("#fileName").textContent=selectedFile?selectedFile.name:"No file selected"});
@@ -55,4 +83,4 @@ $("#cameraStop").addEventListener("click",closeCamera);
 window.addEventListener("pagehide",closeCamera);
 $("#analyzeBtn").addEventListener("click",startCapture);
 $("#exportBtn").addEventListener("click",()=>{if(!history.length){alert("No readings available to export.");return}const rows=[["timestamp","instrument","reading","unit","status"],...history.map(r=>[r.time,r.name,r.value,r.unit,r.status])];const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="retrosense-readings.csv";a.click();URL.revokeObjectURL(a.href)});
-initChart();$("#latestStat").textContent="—";$("#gaugeValue").textContent="—";$("#alertStat").textContent="WAITING";$("#alertStat").style.color="var(--muted)";$("#readingTime").textContent="No image analyzed yet";$("#updatedLabel").textContent="—";
+initChart();$("#latestStat").textContent="—";$("#gaugeValue").textContent="—";$("#alertStat").textContent="WAITING";$("#alertStat").style.color="var(--muted)";$("#readingTime").textContent="No image analyzed yet";$("#updatedLabel").textContent="—";restoreDashboardState();
