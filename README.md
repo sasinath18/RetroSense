@@ -4,7 +4,7 @@ AI-assisted digitization of legacy industrial instruments from uploaded images.
 
 ## Prototype capabilities
 
-- Responsive dashboard with reading trend, threshold alerts, history and CSV export
+- Responsive dashboard with reading trend, threshold alerts, browser-persisted history and CSV export
 - Optional browser camera preview and one-frame capture for instrument image analysis
 - FastAPI backend with upload validation, finite-value checks and health endpoint
 - Experimental OpenCV analog-gauge pointer estimation
@@ -87,6 +87,6 @@ See [backend/README.md](backend/README.md) for endpoints and deployment notes. T
 - WebSocket output is simulated demo telemetry, not real sensor data.
 - Analog gauge detection and digital OCR are experimental; successful processing does not guarantee a correct measurement.
 - Digital OCR currently selects one numeric token and may misread seven-segment displays, decimal points or multi-field screens.
-- Jobs are held in process memory and uploaded files are on local disk. Durable storage, authentication, multi-user isolation, monitoring and production security hardening remain future work.
+- Dashboard history is stored in the current browser's local storage; it does not sync across browsers or devices. Backend jobs remain in process memory and uploaded files are on local disk. Shared durable storage, authentication, multi-user isolation, monitoring and production security hardening remain future work.
 - Use `backend/evaluate_samples.py` for analog gauge accuracy metrics and `backend/evaluate_digital_samples.py` for digital OCR metrics. Both require independently verified reference values.
 - Calibrate each instrument and compare outputs against independently verified ground-truth readings before any operational use.
