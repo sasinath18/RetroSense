@@ -8,16 +8,16 @@ const source = fs.readFileSync(path.join(root, "app.js"), "utf8");
 const markup = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const stylesheet = fs.readFileSync(path.join(root, "style.css"), "utf8");
 
-const markupIds = [...markup.matchAll(/\\bid="([^"]+)"/g)].map(match => match[1]);
+const markupIds = [...markup.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
 const duplicateIds = markupIds.filter((id, index) => markupIds.indexOf(id) !== index);
 assert.deepEqual(duplicateIds, [], "Dashboard HTML must not contain duplicate IDs");
-const referencedIds = [...source.matchAll(/\\$\\("#([^"]+)"\\)/g)].map(match => match[1]);
+const referencedIds = [...source.matchAll(/\$\("#([^"]+)"\)/g)].map(match => match[1]);
 const missingIds = [...new Set(referencedIds.filter(id => !markupIds.includes(id)))];
 assert.deepEqual(missingIds, [], "Every JavaScript ID selector must exist in the dashboard HTML");
 assert.ok(markup.includes('id="selectedPreview"'), "Instrument image preview must exist in the dashboard markup");
 assert.ok(markup.includes('id="systemState"'), "Live API status indicator must exist in the dashboard markup");
 assert.ok(stylesheet.includes(".sidebar .nav{display:flex"), "Mobile navigation must remain visible");
-assert.ok(!/\\.needle\\{[^}]*transform:none/.test(stylesheet), "CSS must not override the SVG needle transform");
+assert.ok(!/\.needle\\{[^}]*transform:none/.test(stylesheet), "CSS must not override the SVG needle transform");
 
 
 function makeDashboard({withChart = true} = {}) {
