@@ -60,16 +60,17 @@ def test_create_job_and_start_uses_uploaded_image(monkeypatch, tmp_path):
     monkeypatch.setattr(main, "_analyse_job", lambda job: {
         "value": 42.5, "confidence": "experimental"
     })
+    image_bytes = valid_png()
     created = client.post(
         "/api/jobs",
         data={"machine_name": "Boiler pressure", "mode": "analog",
               "min_value": "0", "max_value": "100",
               "warning_limit": "70", "danger_limit": "90"},
-        files={"file": ("gauge.png", valid_png(), "image/png")},
+        files={"file": ("gauge.png", image_bytes, "image/png")},
     )
     assert created.status_code == 200
     job_id = created.json()["job_id"]
-    assert (tmp_path / f"{job_id}_gauge.png").read_bytes() == b"image-bytes"
+    assert (tmp_path / f"{job_id}_gauge.png").read_bytes() == image_bytes
 
     started = client.post(f"/api/jobs/{job_id}/start")
     assert started.status_code == 200
