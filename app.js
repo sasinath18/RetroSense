@@ -40,7 +40,8 @@ async function syncServerHistory(){
   if(!api)return;
   try{
     const response=await fetch(api+"/api/readings",{headers:apiHeaders(),signal:AbortSignal.timeout(isLocalHost?5000:90000)});
-    if(!response.ok)return;
+    if(response.status===401){$("#apiStatus").textContent="TOKEN REQUIRED";return}
+    if(!response.ok)throw Error("Reading history request failed ("+response.status+")");
     const payload=await response.json();
     const remote=(payload.readings||[]).map(item=>({
       time:item.timestamp,
@@ -57,7 +58,7 @@ async function syncServerHistory(){
     const alertKeys=new Set(alerts.map(item=>item.job_id).filter(Boolean));
     alerts=[...remote.filter(item=>item.status!=="NORMAL"&&!alertKeys.has(item.job_id)),...alerts].slice(0,100);
     persistDashboardState();
-    restoreDashboardState();syncServerHistory();
+    restoreDashboardState();
     $("#apiStatus").textContent="ONLINE";
   }catch(err){console.warn("Could not sync server history:",err)}
 }
@@ -186,4 +187,19 @@ $("#cameraStop").addEventListener("click",closeCamera);
 window.addEventListener("pagehide",closeCamera);
 $("#analyzeBtn").addEventListener("click",startCapture);
 $("#exportBtn").addEventListener("click",()=>{if(!history.length){alert("No readings available to export.");return}const rows=[["timestamp","instrument","reading","unit","status"],...history.map(r=>[r.time,r.name,r.value,r.unit,r.status])];const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="retrosense-readings.csv";a.click();URL.revokeObjectURL(a.href)});
-initChart();$("#latestStat").textContent="—";$("#gaugeValue").textContent="—";$("#alertStat").textContent="WAITING";$("#alertStat").style.color="var(--muted)";$("#readingTime").textContent="No image analyzed yet";$("#updatedLabel").textContent="—";restoreDashboardState();
+async function checkApiConnection(){
+  if(!api){$("#apiStatus").textContent="NOT CONFIGURED";return}
+  $("#apiStatus").textContent="CONNECTING";
+  try{
+    const response=await fetch(api+"/api/health",{signal:AbortSignal.timeout(isLocalHost?5000:90000)});
+    if(!response.ok)throw Error("Health check failed ("+response.status+")");
+    const payload=await response.json();
+    if(payload.status!=="ok")throw Error("Unexpected API health response");
+    $("#apiStatus").textContent="ONLINE";
+    if(apiToken)await syncServerHistory();
+  }catch(err){
+    $("#apiStatus").textContent="OFFLINE";
+    console.warn("RetroSense API health check failed:",err);
+  }
+}
+initChart();$("#latestStat").textContent="—";$("#gaugeValue").textContent="—";$("#alertStat").textContent="WAITING";$("#alertStat").style.color="var(--muted)";$("#readingTime").textContent="No image analyzed yet";$("#updatedLabel").textContent="—";restoreDashboardState();checkApiConnection();
