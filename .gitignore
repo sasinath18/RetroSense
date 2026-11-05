@@ -1,1 +1,8 @@
-__pycache__/\n*.py[cod]\n.venv/\nvenv/\n.env\nuploads/\n.DS_Store\n
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+uploads/
+.pytest_cache/
+.DS_Store
