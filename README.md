@@ -53,7 +53,7 @@ The report includes per-image estimates and MAE, RMSE and MAPE. MAPE excludes ze
 Three user-supplied gauge photos were previously used for an initial smoke check. Those outputs were not independently verified; therefore no real-world MAE, MAPE or success rate is claimed. The sample photos are not stored in this repository.
 
 ## Digital display OCR
-The dashboard's **Digital display** mode calls `POST /api/analyze` with `mode=digital`. The backend uses OpenCV grayscale/CLAHE/upscaling/Otsu preprocessing followed by Tesseract OCR, restricted to numeric characters and decimal/sign symbols. The API returns the selected numeric token, raw recognized token, Tesseract token confidence (0–100), and a warning to verify the reading.
+Job creation validates image type, non-empty content, a 12 MB upload limit, mode, range and thresholds. Starting a job now performs a single analysis of the stored image and records the result for CSV export. The WebSocket remains explicitly simulated demo telemetry; it is not connected to a live camera or physical sensor.\n\nThe dashboard's **Digital display** mode calls `POST /api/analyze` with `mode=digital`. The backend uses OpenCV grayscale/CLAHE/upscaling/Otsu preprocessing followed by Tesseract OCR, restricted to numeric characters and decimal/sign symbols. The API returns the selected numeric token, raw recognized token, Tesseract token confidence (0–100), and a warning to verify the reading.
 
 Python dependency installation:
 ```bash
@@ -79,9 +79,9 @@ Tests cover angle-to-value mapping, invalid calibration, central dial-circle sel
 - `GET /api/health`
 - `POST /api/analyze`
 - `POST /api/jobs`
-- `POST /api/jobs/{job_id}/start`
+- `POST /api/jobs/{job_id}/start` (runs one analysis on the uploaded image and stores the result)
 - `GET /api/jobs/{job_id}/export.csv`
-- `WS /ws/jobs/{job_id}`
+- `WS /ws/jobs/{job_id}` (simulated demo telemetry only; not a live camera or sensor feed)
 
 ## Safety
 Academic prototype only. Not certified for safety-critical monitoring or control. Never use its output as the sole basis for industrial decisions.
