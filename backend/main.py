@@ -6,10 +6,10 @@ from uuid import uuid4
 from datetime import datetime, timezone
 from vision import read_analog_gauge, GaugeReadError
 from digital_ocr import read_digital_display, DigitalReadError
-import asyncio, csv, io, json, random
+import asyncio, csv, io, json, random, os
 
 app = FastAPI(title="RetroSense API", version="0.3.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=False,
+app.add_middleware(CORSMiddleware, allow_origins=[x.strip() for x in os.getenv("CORS_ORIGINS", "*").split(",") if x.strip()], allow_credentials=False,
                    allow_methods=["GET", "POST"], allow_headers=["*"])
 STORE = Path("uploads")
 STORE.mkdir(exist_ok=True)
