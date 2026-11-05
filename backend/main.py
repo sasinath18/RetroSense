@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 from datetime import datetime, timezone
 from vision import read_analog_gauge, GaugeReadError
+from digital_ocr import read_digital_display, DigitalReadError
 import asyncio, csv, io, json, random, shutil
 
 app = FastAPI(title="RetroSense API", version="0.2.0")
@@ -20,9 +21,9 @@ def health():
 async def analyze_image(file: UploadFile = File(...), mode: str = Form("analog"),
                         min_value: float = Form(0), max_value: float = Form(100),
                         start_angle: float = Form(135), end_angle: float = Form(45)):
-    if mode != "analog":
-        raise HTTPException(501, "Digital-display OCR is not implemented yet.")
-    if max_value <= min_value:
+    if mode not in ("analog", "digital"):
+        raise HTTPException(400, "mode must be analog or digital")
+    if mode == "analog" and max_value <= min_value:
         raise HTTPException(400, "max_value must be greater than min_value")
     if file.content_type not in ("image/jpeg", "image/png", "image/webp", "image/bmp"):
         raise HTTPException(415, "Upload JPG, PNG, WEBP or BMP. Video analysis is not enabled yet.")
@@ -30,9 +31,12 @@ async def analyze_image(file: UploadFile = File(...), mode: str = Form("analog")
     if len(data) > 12 * 1024 * 1024:
         raise HTTPException(413, "Image exceeds the 12 MB limit.")
     try:
+        if mode == "digital":
+            result = read_digital_display(data)
+            return {**result, "mode": "digital"}
         result = read_analog_gauge(data, min_value, max_value, start_angle, end_angle)
         return {**result, "mode": "analog"}
-    except GaugeReadError as exc:
+    except (GaugeReadError, DigitalReadError) as exc:
         raise HTTPException(422, str(exc))
 
 @app.post("/api/jobs")
