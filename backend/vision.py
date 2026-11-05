@@ -197,7 +197,14 @@ def read_analog_gauge(image_bytes, min_value, max_value, start_angle=135.0, end_
     hough_result = _detect_pointer_angle_hough(gray, cx, cy, radius)
     if hough_result is not None:
         pointer_angle, pointer_length, hub_offset = hough_result
-        value = angle_to_value(pointer_angle, min_value, max_value, start_angle, end_angle)
+        try:
+            value = angle_to_value(pointer_angle, min_value, max_value, start_angle, end_angle)
+        except GaugeReadError:
+            # A long printed mark can occasionally resemble a pointer. If its
+            # angle falls outside the calibrated sweep, try the radial detector.
+            hough_result = None
+
+    if hough_result is not None:
         confidence = "experimental" if pointer_length >= radius * 0.55 and hub_offset <= radius * 0.05 else "low"
         diagnostics = {
             "pointer_line_length_px": round(pointer_length, 2),
