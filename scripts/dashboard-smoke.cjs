@@ -16,6 +16,10 @@ const missingIds = [...new Set(referencedIds.filter(id => !markupIds.includes(id
 assert.deepEqual(missingIds, [], "Every JavaScript ID selector must exist in the dashboard HTML");
 assert.ok(markup.includes('id="selectedPreview"'), "Instrument image preview must exist in the dashboard markup");
 assert.ok(markup.includes('id="systemState"'), "Live API status indicator must exist in the dashboard markup");
+assert.ok(markup.includes('id="gaugeReadState"'), "Gauge reading state badge must exist");
+assert.ok(stylesheet.includes("stroke-dashoffset:383.3;opacity:0"), "Gauge progress must start dark and empty");
+assert.ok(stylesheet.includes(".gauge-panel.has-reading .gauge-progress{opacity:1}"), "Gauge progress should illuminate only after a reading");
+
 assert.ok(stylesheet.includes(".sidebar .nav{display:flex"), "Mobile navigation must remain visible");
 assert.ok(!/\.needle\{[^}]*transform:none/.test(stylesheet), "CSS must not override the SVG needle transform");
 
@@ -190,6 +194,9 @@ async function run(withChart) {
   await waitForStartup();
 
   assert.equal(elements.get("apiStatus").textContent, "ONLINE", "API health status should become ONLINE");
+  assert.equal(elements.get("gaugeArc").style.opacity, "0", "Gauge light must be off before a reading");
+  assert.equal(elements.get("needle").style.opacity, "0", "Needle must be hidden before a reading");
+  assert.equal(elements.get("gaugeReadState").textContent, "WAITING", "Gauge should show WAITING before a reading");
   assert.ok(elements.get("systemState").lastChild.textContent.includes("CONNECTED"), "Header should show API connection");
 
   modeButtons[1].listeners.click();
@@ -219,6 +226,10 @@ async function run(withChart) {
   element("maxValue").value = "100";
   await elements.get("analyzeBtn").listeners.click();
   assert.equal(elements.get("latestStat").textContent, "76.3", "Successful image analysis should update latest reading");
+  assert.equal(elements.get("gaugeArc").style.opacity, "1", "Gauge light should turn on after a reading");
+  assert.equal(elements.get("needle").style.opacity, "1", "Needle should appear after a reading");
+  assert.equal(elements.get("gaugeReadState").textContent, "READING", "Gauge state should change after analysis");
+  assert.ok(elements.get("gauge-panel").classList.contains("has-reading"), "Gauge should enter its reading state");
   assert.equal(elements.get("alertStat").textContent, "WARNING", "Threshold status should update");
   assert.ok(elements.get("historyBody").innerHTML.includes("Boiler pressure gauge"), "Reading should appear in history");
   assert.equal(elements.get("trendChart").getBoundingClientRect().width, 640, "Trend chart canvas should remain measurable");
