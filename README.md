@@ -5,7 +5,8 @@ AI-assisted digitization of legacy industrial instruments from uploaded images.
 ## Prototype capabilities
 
 - Responsive dashboard with reading trend, threshold alerts, history and CSV export
-- FastAPI backend with upload validation and health endpoint
+- Optional browser camera preview and one-frame capture for instrument image analysis
+- FastAPI backend with upload validation, finite-value checks and health endpoint
 - Experimental OpenCV analog-gauge pointer estimation
 - Experimental digital-display OCR using OpenCV preprocessing and Tesseract
 - NORMAL / WARNING / DANGER threshold classification
@@ -73,8 +74,6 @@ Verify with `tesseract --version`.
 
 The Free instance can spin down when idle, so its first request after inactivity may take longer. The dashboard uses `http://127.0.0.1:8000` automatically during local development. On a deployed dashboard, it will not send API requests to the GitHub Pages host when the Render URL is missing; it shows an explicit configuration message instead.
 
-The dashboard uses `http://127.0.0.1:8000` automatically during local development. On a deployed dashboard, it will not send API requests to the GitHub Pages host when the Render URL is missing; it shows an explicit configuration message instead.
-
 The Render blueprint restricts browser API access to the GitHub Pages origin. If you use a custom frontend domain, update `CORS_ORIGINS` in `render.yaml` to that domain's origin (scheme + host only).
 
 ## API and validation
@@ -83,9 +82,11 @@ See [backend/README.md](backend/README.md) for endpoints and deployment notes. T
 
 ## Known limitations — not production-ready
 
-- Analysis is single-image upload based; live camera streaming and physical sensor integration are not implemented.
+- Analysis supports uploaded images and optional browser camera frame capture. It captures one still frame per click; continuous live-video analysis is not implemented.
+- Physical sensor integration is not implemented.
 - WebSocket output is simulated demo telemetry, not real sensor data.
 - Analog gauge detection and digital OCR are experimental; successful processing does not guarantee a correct measurement.
 - Digital OCR currently selects one numeric token and may misread seven-segment displays, decimal points or multi-field screens.
 - Jobs are held in process memory and uploaded files are on local disk. Durable storage, authentication, multi-user isolation, monitoring and production security hardening remain future work.
+- Use `backend/evaluate_samples.py` for analog gauge accuracy metrics and `backend/evaluate_digital_samples.py` for digital OCR metrics. Both require independently verified reference values.
 - Calibrate each instrument and compare outputs against independently verified ground-truth readings before any operational use.
