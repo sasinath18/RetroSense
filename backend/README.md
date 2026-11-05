@@ -35,7 +35,9 @@ Interactive API docs: `http://127.0.0.1:8000/docs`
 - `POST /api/jobs`: validates and stores one uploaded image as a job.
 - `POST /api/jobs/{job_id}/start`: analyses that stored image once.
 - `GET /api/jobs/{job_id}/export.csv`: exports the job reading.
-- `GET /api/readings`: returns readings saved in the configured SQLite database.
+- `GET /api/readings`: returns readings saved in the configured SQLite database. Protected by `X-API-Token` when `RETROSENSE_API_TOKEN` is configured.
+
+The `/api/health` endpoint stays public for hosting health checks. When `RETROSENSE_API_TOKEN` is configured, image analysis, job creation, job start, CSV export and reading history require the `X-API-Token` header. Local development leaves this unset by default. The dashboard stores the entered token only in the current browser session.
 - `WS /ws/jobs/{job_id}`: simulated demo telemetry only; it is not a live camera or sensor stream.
 
 Supported upload types: JPEG, PNG, WEBP and BMP; maximum size 12 MB.
@@ -63,7 +65,7 @@ CSV templates are in `samples/`. Put the corresponding instrument images beside 
 
 The repository root contains `render.yaml`. It defines a Free Docker web service in Singapore and uses `backend/Dockerfile`. The Docker image installs the Tesseract executable and OpenCV runtime libraries, then installs the Python dependencies from `requirements.txt`. This avoids deploying the `pytesseract` Python wrapper without its required system executable.
 
-The Blueprint sets `CORS_ORIGINS=https://sasinath18.github.io`. Update this value if the dashboard is moved to a different origin.
+The Blueprint sets `CORS_ORIGINS=https://sasinath18.github.io` and asks you to provide `RETROSENSE_API_TOKEN` as a secret during deployment. Set a long random value and never commit it. The dashboard prompts the operator for that token when the first protected API request is made. Update the CORS value if the dashboard is moved to a different origin.
 
 ## Reading and job storage
 
