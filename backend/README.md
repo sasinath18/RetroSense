@@ -75,7 +75,7 @@ Analysis jobs and completed readings are stored in SQLite. By default the databa
 
 ## Camera capture
 
-The dashboard can request browser camera permission and capture a still image for the existing image-analysis API. Camera access requires HTTPS (GitHub Pages) or localhost. This is one-frame capture, not continuous video analysis.
+The dashboard can request browser camera permission, capture a manual still image, or automatically analyze one still frame every five seconds. Camera access requires HTTPS (GitHub Pages) or localhost. This is repeated snapshot analysis, not continuous video streaming. Use the Stop auto control to stop periodic capture.
 
 ## Prototype limitations
 
