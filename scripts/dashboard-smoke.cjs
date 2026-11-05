@@ -210,6 +210,9 @@ async function run(withChart) {
   fileInput.listeners.change({target: {files: [validFile]}});
   assert.equal(elements.get("fileName").textContent.includes("gauge.png"), true, "File selection should update filename");
   assert.equal(elements.get("selectedPreview").hidden, false, "File selection should show image preview");
+  assert.equal(elements.get("latestStat").textContent, "—", "Selecting a new image must clear the previous latest reading");
+  assert.equal(elements.get("gaugeReadState").textContent, "WAITING", "Selecting a new image must return the gauge to WAITING");
+  assert.ok(elements.get("analysisFeedback").textContent.includes("previous reading remains in history"), "Dashboard should explain that the old result is retained only in history");
 
   const invalidFile = {name: "notes.pdf", type: "application/pdf", size: 1000};
   fileInput.listeners.change({target: {files: [invalidFile]}});
