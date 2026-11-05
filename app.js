@@ -31,14 +31,30 @@ function numericInput(selector,label){
   return value;
 }
 function config(){
+  const name=$("#machineName").value.trim(),unit=$("#unit").value;
+  if(!name)throw Error("Enter an instrument name so readings from different instruments stay separate.");
+  if(!unit)throw Error("Select the unit printed beside the scale you are reading.");
   return{
-    min:numericInput("#minValue","Minimum value"),
-    max:numericInput("#maxValue","Maximum value"),
+    min:numericInput("#minValue","Minimum scale value"),
+    max:numericInput("#maxValue","Maximum scale value"),
     warning:numericInput("#warningLimit","Warning threshold"),
     danger:numericInput("#dangerLimit","Danger threshold"),
-    unit:$("#unit").value,
-    name:$("#machineName").value.trim()||"Instrument"
+    unit,name
   };
+}
+function showAnalysisFeedback(message,level="info"){
+  const box=$("#analysisFeedback");
+  if(!box)return;
+  box.textContent=message;
+  box.className="analysis-feedback "+level;
+}
+function updateModeFields(){
+  const analog=mode==="analog";
+  document.querySelectorAll(".angle-field input").forEach(input=>{input.disabled=!analog});
+  if(!analog)$("#analysisFeedback").textContent="Digital mode uses OCR. Scale limits and thresholds are still required for status classification.";
+}
+function chartRowsFor(row){
+  return history.filter(item=>item.name===row.name&&item.unit===row.unit&&(item.mode||"analog")===(row.mode||"analog")).slice(0,20).reverse();
 }
 function status(v,c){return v>=c.danger?"DANGER":v>=c.warning?"WARNING":"NORMAL"}
 function updateGauge(value,c){
@@ -51,27 +67,35 @@ function updateGauge(value,c){
 function addReading(v,details={}){
   if(!Number.isFinite(v))throw Error("The backend returned an invalid numeric reading.");
   const c=details.scale||config(),s=details.status||status(v,c),t=details.displayTime||now();
-  $("#latestStat").textContent=v.toFixed(1);$("#unitStat").textContent=details.unit||c.unit;
-  $("#gaugeValue").textContent=v.toFixed(1);$("#gaugeUnit").textContent=details.unit||c.unit;
-  $("#updatedLabel").textContent=t;$("#readingTime").textContent="Updated at "+t;
-  $("#instrumentStat").textContent=String(new Set([c.name,...history.map(item=>item.name)]).size).padStart(2,"0");
-  $("#modeStat").textContent=(details.mode||mode).toUpperCase();
-  $("#alertStat").textContent=s;$("#alertStat").className=s==="NORMAL"?"status-normal":"";
-  $("#alertStat").style.color=s==="DANGER"?"var(--red)":s==="WARNING"?"var(--amber)":"var(--green)";
-  updateGauge(v,c);
-  $("#gaugeArc").style.stroke=s==="DANGER"?"var(--red)":s==="WARNING"?"var(--amber)":"var(--cyan)";
   const row={
     time:details.timestamp||new Date().toISOString(),displayTime:t,
     name:details.instrument||c.name,value:v,unit:details.unit||c.unit,
     status:s,mode:details.mode||mode,job_id:details.job_id||null,
-    min:c.min,max:c.max,warning:c.warning,danger:c.danger
+    min:c.min,max:c.max,warning:c.warning,danger:c.danger,
+    startAngle:details.startAngle??null,endAngle:details.endAngle??null,
+    confidence:details.confidence||"unknown",
+    ambiguous:Boolean(details.ambiguous),
+    analysisNote:details.analysisNote||""
   };
   history=history.filter(item=>!row.job_id||item.job_id!==row.job_id);
   history.unshift(row);history=history.slice(0,100);renderHistory();
-  samples.push({x:t,y:v});samples=samples.slice(-20);
+
+  $("#latestStat").textContent=v.toFixed(1);$("#unitStat").textContent=row.unit;
+  $("#gaugeValue").textContent=v.toFixed(1);$("#gaugeUnit").textContent=row.unit;
+  $("#updatedLabel").textContent=t;$("#readingTime").textContent="Updated at "+t;
+  $("#instrumentStat").textContent=String(new Set(history.map(item=>item.name)).size).padStart(2,"0");
+  $("#modeStat").textContent=row.mode.toUpperCase();
+  $("#alertStat").textContent=s;$("#alertStat").className=s==="NORMAL"?"status-normal":"";
+  $("#alertStat").style.color=s==="DANGER"?"var(--red)":s==="WARNING"?"var(--amber)":"var(--green)";
+  updateGauge(v,c);
+  $("#gaugeArc").style.stroke=s==="DANGER"?"var(--red)":s==="WARNING"?"var(--amber)":"var(--cyan)";
+
+  const matching=chartRowsFor(row);
+  samples=matching.map(item=>({x:item.displayTime,y:Number(item.value)}));
   chart.data.labels=samples.map(item=>item.x);
   chart.data.datasets[0].data=samples.map(item=>item.y);
   chart.update("none");
+
   if(s!=="NORMAL"&&(!alerts.length||alerts[0].job_id!==row.job_id)){
     alerts.unshift(row);alerts=alerts.slice(0,100);renderAlerts();
   }
@@ -96,12 +120,13 @@ async function syncServerHistory(){
     const remote=(payload.readings||[]).map(item=>({
       time:item.timestamp,
       displayTime:new Date(item.timestamp).toLocaleTimeString(),
-      name:item.instrument,
-      value:Number(item.value),
-      unit:item.unit,
-      status:item.status,
-      mode:item.mode,
-      job_id:item.job_id
+      name:item.instrument,value:Number(item.value),unit:item.unit,status:item.status,
+      mode:item.mode,job_id:item.job_id,
+      min:item.min_value??item.min,max:item.max_value??item.max,
+      warning:item.warning_limit??item.warning,danger:item.danger_limit??item.danger,
+      startAngle:item.start_angle??item.startAngle,endAngle:item.end_angle??item.endAngle,
+      confidence:item.confidence||"unknown",ambiguous:Boolean(item.ambiguous),
+      analysisNote:item.analysis_note||item.analysisNote||""
     })).filter(item=>Number.isFinite(item.value));
     const known=new Set(history.map(item=>item.job_id).filter(Boolean));
     history=[...remote.filter(item=>!known.has(item.job_id)),...history].slice(0,100);
@@ -121,17 +146,26 @@ function restoreDashboardState(){
   }catch(err){history=[];alerts=[];console.warn("RetroSense local history could not be read:",err)}
   renderHistory();renderAlerts();
   if(!history.length)return;
-  const latest=history[0],c=config(),value=Number(latest.value),s=latest.status;
-  $("#latestStat").textContent=value.toFixed(1);$("#unitStat").textContent=latest.unit||c.unit;
-  $("#gaugeValue").textContent=value.toFixed(1);$("#gaugeUnit").textContent=latest.unit||c.unit;
+  const latest=history[0],value=Number(latest.value),s=latest.status;
+  const c={
+    min:Number.isFinite(Number(latest.min))?Number(latest.min):0,
+    max:Number.isFinite(Number(latest.max))&&Number(latest.max)>Number(latest.min)?Number(latest.max):100,
+    warning:Number.isFinite(Number(latest.warning))?Number(latest.warning):Infinity,
+    danger:Number.isFinite(Number(latest.danger))?Number(latest.danger):Infinity,
+    name:latest.name,unit:latest.unit||""
+  };
+  $("#latestStat").textContent=value.toFixed(1);$("#unitStat").textContent=latest.unit||"—";
+  $("#gaugeValue").textContent=value.toFixed(1);$("#gaugeUnit").textContent=latest.unit||"—";
   $("#readingTime").textContent="Restored from this browser · "+latest.displayTime;
-  $("#updatedLabel").textContent=latest.displayTime;$("#instrumentStat").textContent=String(new Set(history.map(item=>item.name)).size).padStart(2,"0");$("#modeStat").textContent=(latest.mode||mode).toUpperCase();$("#alertStat").textContent=s||"UNKNOWN";
+  $("#updatedLabel").textContent=latest.displayTime;
+  $("#instrumentStat").textContent=String(new Set(history.map(item=>item.name)).size).padStart(2,"0");
+  $("#modeStat").textContent=(latest.mode||"—").toUpperCase();$("#alertStat").textContent=s||"UNKNOWN";
   $("#alertStat").style.color=s==="DANGER"?"var(--red)":s==="WARNING"?"var(--amber)":"var(--green)";
-  const scale={min:Number.isFinite(latest.min)?latest.min:c.min,max:Number.isFinite(latest.max)?latest.max:c.max};
-  updateGauge(value,scale);
-  $("#gaugeArc").style.stroke=$("#alertStat").style.color==="var(--red)"?"var(--red)":$("#alertStat").style.color==="var(--amber)"?"var(--amber)":"var(--cyan)";
-  samples=history.slice(0,20).reverse().map(r=>({x:r.displayTime,y:Number(r.value)}));
-  chart.data.labels=samples.map(x=>x.x);chart.data.datasets[0].data=samples.map(x=>x.y);chart.update("none");
+  updateGauge(value,c);
+  $("#gaugeArc").style.stroke=s==="DANGER"?"var(--red)":s==="WARNING"?"var(--amber)":"var(--cyan)";
+  const matching=chartRowsFor(latest);
+  samples=matching.map(row=>({x:row.displayTime,y:Number(row.value)}));
+  chart.data.labels=samples.map(item=>item.x);chart.data.datasets[0].data=samples.map(item=>item.y);chart.update("none");
 }
 function initChart(){
   const canvas=$("#trendChart");
@@ -250,8 +284,14 @@ function showSelectedFile(file){
 document.querySelectorAll(".mode").forEach(button=>button.addEventListener("click",()=>{
   document.querySelectorAll(".mode").forEach(item=>item.classList.remove("active"));
   button.classList.add("active");mode=button.dataset.mode;$("#modeStat").textContent=mode.toUpperCase();
+  updateModeFields();
+  showAnalysisFeedback(mode==="analog"
+    ?"Analog mode: select one scale ring, then enter its values and endpoint angles."
+    :"Digital mode: OCR reads the displayed digits. Set unit and alert thresholds for this instrument.","info");
 }));
-$("#fileInput").addEventListener("change",event=>showSelectedFile(event.target.files[0]));
+$("#fileInput").addEventListener("change",event=>{
+  if(showSelectedFile(event.target.files[0]))showAnalysisFeedback("Image selected. Confirm instrument name, unit, scale and calibration before analysis.","info");
+});
 $("#dropzone").addEventListener("dragover",event=>{event.preventDefault();event.currentTarget.classList.add("drag-active")});
 $("#dropzone").addEventListener("dragleave",event=>event.currentTarget.classList.remove("drag-active"));
 $("#dropzone").addEventListener("drop",event=>{
@@ -270,13 +310,12 @@ document.querySelectorAll(".nav").forEach(link=>link.addEventListener("click",()
 }));
 async function startCapture({silent=false}={}){
   if(isAnalyzing)return;
-  let c,captureMode,captureFile,captureStartAngle=135,captureEndAngle=45;
+  let c,captureMode,captureFile,captureStartAngle=null,captureEndAngle=null;
   try{
-    c=config();
-    captureMode=mode;
-    captureFile=selectedFile;
-    if(c.max<=c.min)throw Error("Maximum value must be greater than minimum value.");
-    if(c.warning<c.min||c.danger>c.max)throw Error("Warning and danger thresholds must be within the instrument range.");
+    c=config();captureMode=mode;captureFile=selectedFile;
+    if(c.max<=c.min)throw Error("Maximum scale value must be greater than minimum scale value.");
+    if(c.warning<c.min||c.warning>c.max||c.danger<c.min||c.danger>c.max)
+      throw Error("Warning and danger thresholds must both be within the selected scale range.");
     if(c.danger<c.warning)throw Error("Danger threshold must be greater than or equal to warning threshold.");
     if(captureMode==="analog"){
       captureStartAngle=numericInput("#startAngle","Start angle");
@@ -284,12 +323,16 @@ async function startCapture({silent=false}={}){
       if(captureStartAngle<0||captureStartAngle>359||captureEndAngle<0||captureEndAngle>359||captureStartAngle===captureEndAngle)
         throw Error("Calibration angles must be different values between 0 and 359 degrees.");
     }
-  }catch(error){if(!silent)alert(error.message);else $("#cameraStatus").textContent=error.message;return}
-  if(!captureFile){if(!silent)alert("Choose an instrument image first.");return}
-  if(!api){setApiState("NOT CONFIGURED");if(!silent)alert("The FastAPI backend URL is not configured.");return}
-  if(isAnalyzing)return;
+  }catch(error){
+    showAnalysisFeedback(error.message,"error");
+    if(!silent)$("#analysisFeedback").scrollIntoView({block:"nearest",behavior:"smooth"});
+    return;
+  }
+  if(!captureFile){showAnalysisFeedback("Choose an instrument image first.","error");return}
+  if(!api){setApiState("NOT CONFIGURED");showAnalysisFeedback("The FastAPI backend URL is not configured.","error");return}
   const btn=$("#analyzeBtn");isAnalyzing=true;btn.disabled=true;
   $("#cameraCapture").disabled=true;btn.textContent="Analyzing image…";
+  showAnalysisFeedback("Uploading image and analyzing "+c.name+"…","info");
   try{
     const timeout=AbortSignal.timeout(120000);
     const health=await fetch(api+"/api/health",{signal:timeout});
@@ -299,8 +342,7 @@ async function startCapture({silent=false}={}){
     fd.append("file",captureFile);fd.append("mode",captureMode);fd.append("machine_name",c.name);fd.append("unit",c.unit);
     fd.append("min_value",c.min);fd.append("max_value",c.max);fd.append("warning_limit",c.warning);fd.append("danger_limit",c.danger);
     if(captureMode==="analog"){
-      fd.append("start_angle",captureStartAngle);
-      fd.append("end_angle",captureEndAngle);
+      fd.append("start_angle",captureStartAngle);fd.append("end_angle",captureEndAngle);
     }
     const createdResponse=await authorizedFetch(api+"/api/jobs",{method:"POST",body:fd,signal:timeout},true);
     const created=await createdResponse.json().catch(()=>({detail:"Backend returned an unreadable response."}));
@@ -316,25 +358,30 @@ async function startCapture({silent=false}={}){
       throw Error(result.detail||"Image analysis failed ("+resultResponse.status+").");
     }
     const reading=result.reading;
-    if(!reading||!Number.isFinite(Number(reading.value)))throw Error("The backend did not return a valid reading.");
+    if(!reading||!Number.isFinite(Number(reading.value)))throw Error("The backend did not return a valid numeric reading.");
     const analysis=reading.analysis||{};
+    const confidence=analysis.confidence||"unknown";
     addReading(Number(reading.value),{
       timestamp:reading.timestamp,instrument:reading.instrument,unit:reading.unit,
       status:reading.status,mode:reading.mode,job_id:jobId,
-      displayTime:new Date(reading.timestamp).toLocaleTimeString(),scale:c
+      displayTime:new Date(reading.timestamp).toLocaleTimeString(),scale:c,
+      startAngle:captureStartAngle,endAngle:captureEndAngle,
+      confidence,ambiguous:Boolean(analysis.ambiguous),analysisNote:analysis.note||""
     });
     $("#readingTime").textContent=(captureMode==="digital"?"OCR estimate · ":"CV estimate · ")+now();
     setApiState("ONLINE");
     await syncServerHistory();
+    const lowConfidence=confidence==="low"||Boolean(analysis.ambiguous);
+    const resultMessage=captureMode==="digital"
+      ?("OCR result: "+reading.value+" "+reading.unit+
+        ". OCR score: "+(analysis.confidence??"not available")+
+        (analysis.ambiguous?". OCR methods disagree; candidates: "+(analysis.candidate_values||[]).join(", "):".")+
+        " Check the displayed digits and decimal point.")
+      :("Estimated reading: "+reading.value+" "+reading.unit+
+        ". Needle angle: "+(analysis.pointer_angle_deg??"unknown")+"°. "+
+        (lowConfidence?"Low detection confidence. Retake/crop and verify the reading.":"Experimental detection; compare with the actual dial before use."));
+    showAnalysisFeedback(resultMessage,lowConfidence?"warning":"success");
     $("#cameraStatus").textContent=$("#cameraPanel").hidden?"Camera is off.":"Frame analyzed: "+reading.value+" "+reading.unit+".";
-    const message=captureMode==="digital"
-      ?"OCR reading: "+reading.value+" "+reading.unit+"\nRecognized text: "+(analysis.raw_text||"")+
-       "\nOCR score: "+(analysis.confidence??"not available")+" (not measurement accuracy)."+
-       (analysis.ambiguous?"\nWARNING: OCR methods disagree. Candidate readings: "+(analysis.candidate_values||[]).join(", "):"")+
-       "\nVerify the displayed value manually."
-      :"Estimated reading: "+reading.value+" "+reading.unit+"\nPointer angle: "+
-       (analysis.pointer_angle_deg??"not available")+"°\nConfidence: "+(analysis.confidence||"unknown")+". Verify manually.";
-    if(!silent)alert(message);
   }catch(error){
     const isAuth=/token|unauthorized|401/i.test(error.message);
     if(isAuth)setApiState("TOKEN REQUIRED");
@@ -342,7 +389,7 @@ async function startCapture({silent=false}={}){
     else if(/fetch|network|health check|backend/i.test(error.message))setApiState("OFFLINE");
     if(silent&&(isAuth||error.name==="AbortError"||error.name==="TimeoutError"||/fetch|network|health check|backend/i.test(error.message)))stopAutoCapture();
     $("#cameraStatus").textContent=error.message;
-    if(!silent)alert("Could not analyze this image.\n"+error.message+"\n\nCheck the API connection, access token, image and calibration.");
+    showAnalysisFeedback("Analysis failed: "+error.message,"error");
   }finally{
     isAnalyzing=false;btn.disabled=false;$("#cameraCapture").disabled=!cameraStream;
     btn.innerHTML='Analyze instrument <span>→</span>';
@@ -426,4 +473,4 @@ async function checkApiConnection(){
     console.warn("RetroSense API health check failed:",err);
   }
 }
-initChart();initGaugeTicks();$("#latestStat").textContent="—";$("#gaugeValue").textContent="—";$("#alertStat").textContent="WAITING";$("#alertStat").style.color="var(--muted)";$("#readingTime").textContent="No image analyzed yet";$("#updatedLabel").textContent="—";restoreDashboardState();checkApiConnection();
+initChart();initGaugeTicks();updateModeFields();$("#latestStat").textContent="—";$("#gaugeValue").textContent="—";$("#alertStat").textContent="WAITING";$("#alertStat").style.color="var(--muted)";$("#readingTime").textContent="No image analyzed yet";$("#updatedLabel").textContent="—";restoreDashboardState();checkApiConnection();
