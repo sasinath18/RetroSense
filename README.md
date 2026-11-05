@@ -57,15 +57,21 @@ Verify with `tesseract --version`.
 - Expected project URL: `https://sasinath18.github.io/RetroSense/`.
 
 ### Backend — Render
-1. In Render, create a **New + → Blueprint** service and connect this repository.
-2. Render reads the root `render.yaml` and creates the `retrosense-api` FastAPI web service.
-3. After the service is live, copy its public URL (for example, `https://retrosense-api.onrender.com`).
-4. In `index.html`, find the inline configuration immediately before `app.js` and set the URL:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/sasinath18/RetroSense)
+
+1. Open the button above (or choose **New + → Blueprint** in the Render Dashboard) and connect this repository.
+2. Review the Blueprint. It creates one **Free** Docker web service in the **Singapore** region; no database or paid add-ons are defined.
+3. Click **Deploy Blueprint**. The Docker image installs Tesseract OCR and the OpenCV runtime libraries as well as the Python requirements.
+4. When the service status is **Live**, copy its public `onrender.com` URL (for example, `https://retrosense-api.onrender.com`).
+5. In `index.html`, find the inline configuration immediately before `app.js` and set the URL:
    ```html
    <script>window.RETROSENSE_API_URL = "https://YOUR-RENDER-SERVICE.onrender.com";</script>
    ```
-5. Commit and push that change. Keep the Render URL without a trailing slash.
-6. In Render, verify `GET /api/health` returns JSON with `"status": "ok"`.
+6. Commit and push that change. Keep the Render URL without a trailing slash.
+7. Verify `https://YOUR-RENDER-SERVICE.onrender.com/api/health` returns JSON with `"status": "ok"`.
+
+The Free instance can spin down when idle, so its first request after inactivity may take longer. The dashboard uses `http://127.0.0.1:8000` automatically during local development. On a deployed dashboard, it will not send API requests to the GitHub Pages host when the Render URL is missing; it shows an explicit configuration message instead.
 
 The dashboard uses `http://127.0.0.1:8000` automatically during local development. On a deployed dashboard, it will not send API requests to the GitHub Pages host when the Render URL is missing; it shows an explicit configuration message instead.
 
