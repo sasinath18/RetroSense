@@ -125,7 +125,9 @@ async function startCapture(){
     $("#cameraStatus").textContent=$("#cameraPanel").hidden?"Camera is off.":"Frame analyzed. Capture another frame or close the camera.";
     alert(mode==="digital"?
       "OCR reading: "+reading.value+" "+reading.unit+"\nRecognized text: "+(analysis.raw_text||"")+
-      "\nOCR score: "+(analysis.confidence??"not available")+" (not measurement accuracy). Verify manually.":
+      "\nOCR score: "+(analysis.confidence??"not available")+" (not measurement accuracy)."+
+      (analysis.ambiguous?"\nWARNING: OCR methods disagree. Candidate readings: "+(analysis.candidate_values||[]).join(", "):"")+
+      " Verify the displayed value manually.":
       "Estimated reading: "+reading.value+" "+reading.unit+"\nPointer angle: "+
       (analysis.pointer_angle_deg??"not available")+"°\nConfidence: experimental. Verify manually.");
   }catch(err){
