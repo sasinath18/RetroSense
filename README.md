@@ -7,6 +7,7 @@ AI-assisted digitization and monitoring for legacy industrial instruments.
 - FastAPI backend
 - Experimental OpenCV analog-gauge baseline: circle detection + pointer-line estimation
 - Threshold-based NORMAL / WARNING / DANGER classification
+- Ground-truth evaluation utility for repeatable gauge-image testing
 
 ## Run locally
 ```bash
@@ -30,7 +31,25 @@ The current baseline applies CLAHE local-contrast enhancement, Hough circle dete
 
 The returned confidence label is heuristic, not a probability. The current line-based method does not reliably distinguish a pointer's reading tip from its counterweight/tail, and can confuse long tick marks or dial graphics with the pointer. It may also fail on glare, perspective distortion, thick or curved pointers, occlusion, unusual dial geometry, dual-scale faces or cluttered backgrounds. A successful API response is not proof of a correct reading. Validate against known reference readings and calibrate angles for each instrument before relying on the result.
 
-Three user-supplied gauge photos were used for an initial local smoke check. The updated detector selected a central dial circle in all three. The first two produced candidate values, while the third returned a low-confidence estimate. These are not accuracy results: the photos do not have independently confirmed ground-truth readings, and the current pointer-tip ambiguity means no MAE, MAPE or success rate is claimed. The sample photos are not stored in this repository.
+## Ground-truth evaluation
+Use `backend/evaluate_samples.py` to compare algorithm outputs with independently verified readings. Create a CSV manifest with these required columns:
+`image,min_value,max_value,expected_value`
+Optional columns: `unit,start_angle,end_angle`. Relative image paths are resolved from the CSV file's directory. Leave `expected_value` blank when no reference reading is available; that sample is analysed but excluded from accuracy metrics.
+
+Example manifest:
+```csv
+image,min_value,max_value,expected_value,unit,start_angle,end_angle
+gauge_a.jpg,0,200,0,kg/cm2,135,45
+gauge_b.jpg,0,7,0,kg/cm2,135,45
+gauge_c.jpg,0,250,,mbar,135,45
+```
+Run from the backend directory:
+```bash
+python evaluate_samples.py samples.csv --output evaluation.json
+```
+The report includes per-image estimates and MAE, RMSE and MAPE. MAPE excludes zero reference values because percentage error is undefined at zero. Do not use guessed readings as ground truth.
+
+Three user-supplied gauge photos were previously used for an initial smoke check. Those outputs were not independently verified; therefore no real-world MAE, MAPE or success rate is claimed. The sample photos are not stored in this repository.
 
 Digital-display OCR and video processing are not implemented yet.
 
@@ -39,7 +58,7 @@ Run from the `backend` directory:
 ```bash
 pytest -q
 ```
-The vision tests cover angle-to-value mapping, invalid calibration, and central dial-circle selection. They do not establish real-world reading accuracy.
+Tests cover angle-to-value mapping, invalid calibration, central dial-circle selection and evaluation metric calculations. They do not establish real-world reading accuracy.
 
 ## API
 - `GET /api/health`
