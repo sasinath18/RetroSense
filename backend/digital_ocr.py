@@ -3,6 +3,7 @@
 Requires the Tesseract OCR executable installed on the host and pytesseract installed
 in the Python environment. This is not a certified measurement instrument.
 """
+import math
 import re
 
 import cv2
@@ -47,41 +48,89 @@ def read_digital_display(image_bytes):
         raise DigitalReadError("Could not decode image. Upload a valid JPG or PNG.")
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     prepared = _normalise_display(gray)
-    config = "--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789.-+"
-    try:
-        data = pytesseract.image_to_data(
-            prepared, config=config, output_type=Output.DICT
+
+    # Different page-segmentation modes help with single-line meters and displays
+    # containing separate groups of digits. Disagreement is surfaced to the user.
+    configs = (6, 7, 8, 13)
+    candidates = []
+    errors = []
+    for psm in configs:
+        config = (
+            f"--oem 3 --psm {psm} "
+            "-c tessedit_char_whitelist=0123456789.-+"
         )
-    except Exception as exc:
-        raise DigitalReadError(
-            "Tesseract OCR could not run. Check that the Tesseract executable is installed and available on PATH."
-        ) from exc
-
-    tokens = []
-    for text, raw_confidence in zip(data["text"], data["conf"]):
-        token = re.sub(r"[^0-9.+-]", "", text.strip())
-        if not token:
-            continue
         try:
-            value = float(token)
-            score = float(raw_confidence)
-        except (TypeError, ValueError):
+            data = pytesseract.image_to_data(
+                prepared, config=config, output_type=Output.DICT
+            )
+        except Exception as exc:
+            errors.append(exc)
             continue
-        tokens.append((token, value, score if score >= 0 else None))
 
-    if not tokens:
+        tokens = []
+        for text, raw_confidence in zip(data["text"], data["conf"]):
+            token = re.sub(r"[^0-9.+-]", "", text.strip())
+            if not token:
+                continue
+            try:
+                value = float(token)
+                score = float(raw_confidence)
+            except (TypeError, ValueError):
+                continue
+            tokens.append({
+                "text": token,
+                "value": value,
+                "confidence": score if score >= 0 else None,
+                "psm": psm,
+            })
+
+        if tokens:
+            candidates.append(max(
+                tokens,
+                key=lambda item: item["confidence"]
+                if item["confidence"] is not None else -1,
+            ))
+
+    if not candidates:
+        if errors and len(errors) == len(configs):
+            raise DigitalReadError(
+                "Tesseract OCR could not run. Check that the Tesseract executable is installed and available on PATH."
+            ) from errors[0]
         raise DigitalReadError(
             "No numeric display value detected. Crop the display tightly, reduce glare and ensure the digits are in focus."
         )
-    # Select the numeric token with the highest reported OCR confidence.
-    text, value, confidence = max(
-        tokens, key=lambda item: item[2] if item[2] is not None else -1
+
+    # Keep the previous highest-confidence selection, but explicitly identify
+    # when alternate segmentation modes disagree instead of hiding ambiguity.
+    selected = max(
+        candidates,
+        key=lambda item: item["confidence"]
+        if item["confidence"] is not None else -1,
+    )
+    candidate_values = []
+    for candidate in candidates:
+        if not any(
+            math.isclose(candidate["value"], value, rel_tol=0.0, abs_tol=1e-9)
+            for value in candidate_values
+        ):
+            candidate_values.append(candidate["value"])
+    ambiguous = len(candidate_values) > 1
+    confidence = selected["confidence"]
+    note = (
+        "OCR configurations disagree. Check the displayed digits and decimal point manually; "
+        "candidate readings are provided. OCR confidence is not measurement accuracy."
+        if ambiguous else
+        "Experimental OCR result. Verify the displayed digits and decimal point manually; "
+        "OCR confidence is not measurement accuracy."
     )
     return {
-        "value": value,
-        "raw_text": text,
+        "value": selected["value"],
+        "raw_text": selected["text"],
         "confidence": round(confidence, 1) if confidence is not None else None,
         "confidence_type": "tesseract_token_score_0_to_100",
-        "method": "tesseract_ocr_preprocessed",
-        "note": "Experimental OCR result. Verify the displayed digits and decimal point manually; OCR confidence is not measurement accuracy.",
+        "method": "tesseract_ocr_multi_psm",
+        "psm_used": selected["psm"],
+        "candidate_values": candidate_values,
+        "ambiguous": ambiguous,
+        "note": note,
     }
