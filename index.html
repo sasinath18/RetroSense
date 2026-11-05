@@ -24,15 +24,15 @@
   <main class="main" id="overview">
     <header class="topbar"><div><div class="eyebrow">INDUSTRIAL MONITORING / WORKSPACE</div><h1>Instrument overview</h1></div><div class="top-actions"><span class="live-pill is-pending" id="systemState" aria-live="polite"><i></i> CHECKING API</span><button class="btn btn-primary" onclick="document.querySelector('#capture').scrollIntoView({behavior:'smooth'})">＋ New capture</button></div></header>
     <section class="stats">
-      <article class="stat"><span>ACTIVE INSTRUMENT</span><strong id="instrumentStat">01</strong><small>Connected session</small></article>
-      <article class="stat"><span>LATEST READING</span><strong><b id="latestStat">—</b> <em id="unitStat">PSI</em></strong><small id="readingTime">No image analyzed yet</small></article>
+      <article class="stat"><span>ACTIVE INSTRUMENT</span><strong id="instrumentStat">00</strong><small>Connected session</small></article>
+      <article class="stat"><span>LATEST READING</span><strong><b id="latestStat">—</b> <em id="unitStat">—</em></strong><small id="readingTime">No image analyzed yet</small></article>
       <article class="stat"><span>ALERT STATUS</span><strong class="status-normal" id="alertStat">WAITING</strong><small>Threshold monitoring</small></article>
-      <article class="stat"><span>CAPTURE MODE</span><strong id="modeStat">ANALOG</strong><small>Image interpretation</small></article>
+      <article class="stat"><span>CAPTURE MODE</span><strong id="modeStat">—</strong><small>Image interpretation</small></article>
     </section>
     <section class="grid-main">
       <article class="panel gauge-panel"><div class="panel-head"><div><div class="eyebrow">LATEST CAPTURE</div><h2>Instrument reading</h2></div><span class="tag"><i></i> READY</span></div>
-        <div class="gauge-wrap"><div class="gauge"><svg viewBox="0 0 320 190" role="img" aria-label="Instrument gauge"><path class="gauge-track" d="M38 160 A122 122 0 0 1 282 160"/><path class="gauge-progress" id="gaugeArc" d="M38 160 A122 122 0 0 1 282 160"/><g id="ticks"></g><line id="needle" x1="160" y1="160" x2="160" y2="54" class="needle"/><circle cx="160" cy="160" r="8" class="hub"/></svg><div class="gauge-value"><strong id="gaugeValue">64.2</strong><span id="gaugeUnit">PSI</span></div></div></div>
-        <div class="gauge-footer"><span>MIN <b id="minLabel">0</b></span><span>MAX <b id="maxLabel">100</b></span><span>UPDATED <b id="updatedLabel">—</b></span></div>
+        <div class="gauge-wrap"><div class="gauge"><svg viewBox="0 0 320 190" role="img" aria-label="Instrument gauge"><path class="gauge-track" d="M38 160 A122 122 0 0 1 282 160"/><path class="gauge-progress" id="gaugeArc" d="M38 160 A122 122 0 0 1 282 160"/><g id="ticks"></g><line id="needle" x1="160" y1="160" x2="160" y2="54" class="needle"/><circle cx="160" cy="160" r="8" class="hub"/></svg><div class="gauge-value"><strong id="gaugeValue">—</strong><span id="gaugeUnit">—</span></div></div></div>
+        <div class="gauge-footer"><span>MIN <b id="minLabel">—</b></span><span>MAX <b id="maxLabel">—</b></span><span>UPDATED <b id="updatedLabel">—</b></span></div>
       </article>
       <article class="panel chart-panel"><div class="panel-head"><div><div class="eyebrow">PERFORMANCE</div><h2>Reading trend</h2></div><span class="subtle">RECENT ANALYSES</span></div><div class="chart-wrap"><canvas id="trendChart"></canvas></div><div class="chart-legend"><span><i></i> Measured value</span><span>Thresholds shown in alert log</span></div></article>
     </section>
@@ -52,8 +52,20 @@
           <canvas id="cameraCanvas" hidden></canvas>
           <small id="cameraStatus" role="status">Camera is off.</small>
         </div>
-        <div class="form-grid"><label>INSTRUMENT NAME<input id="machineName" value="Boiler pressure gauge" placeholder="e.g. Boiler pressure"></label><label>UNIT<select id="unit"><option>PSI</option><option>bar</option><option>°C</option><option>kPa</option><option>V</option><option>A</option><option>%</option></select></label><label>MINIMUM VALUE<input id="minValue" type="number" value="0"></label><label>MAXIMUM VALUE<input id="maxValue" type="number" value="100"></label><label>WARNING ABOVE<input id="warningLimit" type="number" value="75"></label><label>DANGER ABOVE<input id="dangerLimit" type="number" value="90"></label><label>START ANGLE (DEG)<input id="startAngle" type="number" value="135" min="0" max="359"></label><label>END ANGLE (DEG)<input id="endAngle" type="number" value="45" min="0" max="359"></label></div>
-        <button class="btn btn-primary btn-wide" id="analyzeBtn">Analyze instrument <span>→</span></button><p class="helper">Analog mode needs the start/end angles calibrated for each gauge. Digital mode uses multiple OCR layouts. Camera auto mode analyzes a still image every 5 seconds, not continuous video. Readings are experimental; verify them manually.</p>
+        <div class="form-grid">
+          <label>INSTRUMENT NAME<input id="machineName" value="" required maxlength="80" placeholder="e.g. Boiler pressure gauge"></label>
+          <label>UNIT<select id="unit" required><option value="" selected disabled>Select the unit printed on the dial</option><option>PSI</option><option>bar</option><option>mbar</option><option>Pa</option><option>kPa</option><option>mmWC</option><option>inH2O</option><option>mm</option><option>°C</option><option>V</option><option>A</option><option>%</option></select></label>
+          <label>MINIMUM SCALE VALUE<input id="minValue" type="number" required placeholder="e.g. 0"></label>
+          <label>MAXIMUM SCALE VALUE<input id="maxValue" type="number" required placeholder="e.g. 250"></label>
+          <label>WARNING ABOVE<input id="warningLimit" type="number" required placeholder="e.g. 180"></label>
+          <label>DANGER ABOVE<input id="dangerLimit" type="number" required placeholder="e.g. 220"></label>
+          <label class="angle-field">START ANGLE (DEG)<input id="startAngle" type="number" min="0" max="359" required placeholder="e.g. 135"></label>
+          <label class="angle-field">END ANGLE (DEG)<input id="endAngle" type="number" min="0" max="359" required placeholder="e.g. 45"></label>
+        </div>
+        <p class="calibration-hint"><b>Scale setup:</b> Choose one numbered scale ring only. Enter its printed minimum/maximum, the matching unit, and the angles where the needle points at those two values. Do not mix inner and outer scales on a dual-scale gauge.</p>
+        <div id="analysisFeedback" class="analysis-feedback" role="status" aria-live="polite">Select an image and enter that instrument's scale before analysis.</div>
+        <button class="btn btn-primary btn-wide" id="analyzeBtn">Analyze instrument <span>→</span></button>
+        <p class="helper">Digital mode reads numeric text. Analog mode assumes a linear scale between your two calibration points. Image-based readings are estimates and must be checked against a known reference.</p>
       </article>
       <article class="panel alerts-panel"><div class="panel-head"><div><div class="eyebrow">EVENT MONITOR</div><h2>Recent alerts</h2></div><span class="subtle" id="alertCount">0 EVENTS</span></div><div id="alerts" class="alerts-list"><div class="empty">No alerts detected. System is monitoring.</div></div><div class="panel-foot">ALERTS ARE BASED ON CONFIGURED THRESHOLDS</div></article>
     </section>
