@@ -27,8 +27,10 @@ jobs:
           pip install -r requirements.txt
       - name: Run test suite
         run: pytest -q
-      - name: Validate dashboard JavaScript syntax
+      - name: Validate dashboard JavaScript and interactions
         working-directory: .
-        run: node --check app.js
+        run: |
+          node --check app.js
+          node scripts/dashboard-smoke.cjs
       - name: Build deployment Docker image
         run: docker build -t retrosense-api:ci .
