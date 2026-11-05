@@ -26,7 +26,7 @@ Open `http://127.0.0.1:8000/docs` to test the API. Open `index.html` using a loc
 - `min_value`, `max_value`
 - `start_angle`, `end_angle` in image coordinates (degrees; defaults 135° to 45°)
 
-The first implementation uses Hough circle and line detection. It is an experimental baseline and may fail on glare, perspective distortion, thick pointers, occlusion, unusual dial geometry or cluttered backgrounds. It does not yet implement digital-display OCR or video processing. Validate readings against known gauge values and calibrate angles for each instrument.
+The current baseline applies CLAHE local-contrast enhancement, Hough circle detection, edge/line detection, calibrated-arc filtering and a centre-proximity/length heuristic to rank pointer candidates. It reports candidate-line diagnostics and a heuristic confidence label (not a probability). It may still fail on glare, perspective distortion, thick or curved pointers, occlusion, unusual dial geometry, tick marks that resemble the pointer, or cluttered backgrounds. It does not yet implement digital-display OCR or video processing. Validate readings against known gauge values and calibrate angles for each instrument.
 
 ## API
 - `GET /api/health`
