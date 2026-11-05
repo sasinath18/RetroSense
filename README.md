@@ -63,7 +63,7 @@ Verify with `tesseract --version`.
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/sasinath18/RetroSense)
 
 1. Open the button above (or choose **New + → Blueprint** in the Render Dashboard) and connect this repository.
-2. Review the Blueprint. It creates one **Free** Docker web service in the **Singapore** region; no database or paid add-ons are defined.
+2. Review the Blueprint. It creates one **Free** Docker web service in the **Singapore** region; no paid add-ons are defined. Render will ask you to provide `RETROSENSE_API_TOKEN`—use a long random secret and keep it private.
 3. Click **Deploy Blueprint**. The Docker image installs Tesseract OCR and the OpenCV runtime libraries as well as the Python requirements.
 4. When the service status is **Live**, copy its public `onrender.com` URL (for example, `https://retrosense-api.onrender.com`).
 5. In `index.html`, find the inline configuration immediately before `app.js` and set the URL:
@@ -71,11 +71,11 @@ Verify with `tesseract --version`.
    <script>window.RETROSENSE_API_URL = "https://YOUR-RENDER-SERVICE.onrender.com";</script>
    ```
 6. Commit and push that change. Keep the Render URL without a trailing slash.
-7. Verify `https://YOUR-RENDER-SERVICE.onrender.com/api/health` returns JSON with `"status": "ok"`.
+7. Verify `https://YOUR-RENDER-SERVICE.onrender.com/api/health` returns JSON with `"status": "ok"`. The health route is public; image analysis and saved reading-history routes require the API token.
 
 The Free instance can spin down when idle, so its first request after inactivity may take longer. The dashboard uses `http://127.0.0.1:8000` automatically during local development. On a deployed dashboard, it will not send API requests to the GitHub Pages host when the Render URL is missing; it shows an explicit configuration message instead.
 
-The Render blueprint restricts browser API access to the GitHub Pages origin. If you use a custom frontend domain, update `CORS_ORIGINS` in `render.yaml` to that domain's origin (scheme + host only).
+The Render blueprint restricts browser API access to the GitHub Pages origin. If you use a custom frontend domain, update `CORS_ORIGINS` in `render.yaml` to that domain's origin (scheme + host only). When you first analyze an image on the deployed dashboard, it will prompt for the API token and keep it in the current browser session. Do not put the token in `index.html` or commit it to GitHub.
 
 ## API and validation
 
