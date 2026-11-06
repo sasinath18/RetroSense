@@ -61,6 +61,19 @@ Check installation with `tesseract --version`.
 - Digital mode tries Tesseract page-segmentation modes 6, 7, 8 and 13. If they return different numeric values, the API sets `ambiguous=true`, supplies `candidate_values`, and the dashboard warns the operator. Always verify the displayed digits manually.
 - Tesseract confidence is a text-recognition score, not a measurement-accuracy probability.
 
+## Preparing a labelled dataset for ML training
+
+The current analog reader is rule-based OpenCV, not a trained ML model. Do not describe the current code as a trained neural network. To train a learned pointer detector, collect varied images from each gauge family and label the **long measuring arm tip**, never the short counterweight.
+
+Use `samples/needle-annotations-template.csv`. Pixel coordinates are measured from the original uploaded image's top-left corner. For every image, record:
+- dial centre `dial_cx_px,dial_cy_px`;
+- long pointer tip `needle_tip_x_px,needle_tip_y_px`;
+- the selected scale's min/max values and unit;
+- min/max pointer angles for that scale;
+- an independently verified `expected_value`.
+
+Include different manufacturers, dial sizes, pointer shapes, colours, lighting, reflections, camera angles and reading positions. Keep train/validation/test images separated by physical gauge where possible, so nearly identical photos of one gauge do not leak across splits. Start with a small labelled pilot set to confirm the annotation format, then expand to hundreds of diverse labelled images before expecting robust cross-gauge generalisation. The five examples supplied so far are useful debugging samples, but they do not form a sufficient labelled training dataset.
+
 ## Accuracy evaluation
 
 The repository includes two command-line evaluation tools:
