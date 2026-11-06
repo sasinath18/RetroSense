@@ -79,7 +79,7 @@ def _detect_pointer_angle_hough(gray, cx, cy, radius):
     lines = cv2.HoughLinesP(
         edges, 1, np.pi / 180,
         threshold=max(25, int(radius * 0.20)),
-        minLineLength=max(30, int(radius * 0.35)),
+        minLineLength=max(15, int(radius * 0.18)),
         maxLineGap=max(5, int(radius * 0.08)),
     )
     if lines is None:
