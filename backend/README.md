@@ -42,6 +42,18 @@ The `/api/health` endpoint stays public for hosting health checks. When `RETROSE
 
 Supported upload types: JPEG, PNG, WEBP and BMP; maximum size 12 MB. Image bytes are decoded and checked, with a 20-megapixel decoded-image limit.
 
+### Examples from the supplied gauge photos
+
+| Gauge face | Select one scale | Enter its range and unit |
+|---|---|---|
+| Temperature dial | Single black scale | 0–120 °C |
+| Compound pressure dial | Outer black scale | 0–250 (verify the printed unit) |
+| Compound pressure dial | Inner red scale | 0–2500 mbar |
+| Dual pressure dial | Inner black scale | 0–7 kg/cm² |
+| Dual pressure dial | Outer red scale | 0–100 PSI |
+
+These ranges are read from the supplied example faces and are setup guidance, not automatic image recognition. Always verify the selected scale and the min/max angle anchors against the physical dial. Never combine the min value from one ring with the max value from another.
+
 ## Digital OCR dependency
 
 Digital mode requires the Tesseract executable in addition to the Python package `pytesseract`.
