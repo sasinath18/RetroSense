@@ -54,9 +54,10 @@ Check installation with `tesseract --version`.
 
 ## Reading interpretation and calibration
 
-- Analog mode detects the dial circle, then looks for a long straight pointer line crossing near the hub. The farther endpoint is treated as the needle tip so a short counterweight is less likely to be selected. If the line candidate falls outside the configured scale, the radial detector is used as a fallback.
+- Analog mode detects the dial circle, then looks for a straight pointer line crossing near the hub. The longer arm from the hub is treated as the reading pointer; pointer thickness is deliberately not used to choose direction because some gauges have a thick, short counterweight. If the line candidate falls outside the configured scale, the radial detector is used as a fallback.
+- This is currently an OpenCV rule-based computer-vision prototype plus Tesseract OCR; it does not yet contain a trained neural-network model. Real ML training requires many labelled gauge images with verified pointer directions, dial centres, scale ranges, units and reference readings.
 - The analog reader accepts a small 5-degree endpoint tolerance to absorb minor image-detection error. This does not replace correct instrument calibration.
-- Set minimum and maximum to the actual printed instrument range, and calibrate the start/end angles for each gauge. The dashboard defaults are examples, not universal calibration values.
+- Set minimum and maximum to the actual printed instrument range, select the unit printed beside the chosen scale, and calibrate the angle at the minimum tick and the angle at the maximum tick for each gauge. Image-coordinate angles are 0° right, 90° down, 180° left and 270° up. The dashboard defaults are examples, not universal calibration values. On a dual-scale dial, choose either the inner or outer numbered ring and do not mix the two.
 - Digital mode tries Tesseract page-segmentation modes 6, 7, 8 and 13. If they return different numeric values, the API sets `ambiguous=true`, supplies `candidate_values`, and the dashboard warns the operator. Always verify the displayed digits manually.
 - Tesseract confidence is a text-recognition score, not a measurement-accuracy probability.
 
