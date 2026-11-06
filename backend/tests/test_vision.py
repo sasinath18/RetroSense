@@ -73,7 +73,7 @@ def test_hough_detector_uses_long_pointer_side_not_short_counterweight():
     assert hub_offset <= radius * 0.08
 
 
-def test_hough_detector_prefers_thick_short_arrowhead_over_long_thin_tail():
+def test_hough_detector_prefers_long_thin_reading_arm_over_short_thick_counterweight():
     size, center, radius = 400, (200, 200), 160
 
     def point(angle, distance):
@@ -82,7 +82,7 @@ def test_hough_detector_prefers_thick_short_arrowhead_over_long_thin_tail():
                 int(center[1] + distance * np.sin(radians)))
 
     image = np.full((size, size), 245, dtype=np.uint8)
-    # The thin balance tail extends farther than the thick reading pointer.
+    # The long thin measuring arm is the reading direction; the short thick side is the counterweight.
     cv2.line(image, center, point(140, radius * 0.82), 15, 3)
     cv2.line(image, center, point(320, radius * 0.52), 15, 9)
 
@@ -90,7 +90,7 @@ def test_hough_detector_prefers_thick_short_arrowhead_over_long_thin_tail():
 
     assert detected is not None
     angle, line_length, hub_offset = detected
-    assert angle == pytest.approx(320, abs=3)
+    assert angle == pytest.approx(140, abs=3)
     assert line_length >= radius * 0.35
     assert hub_offset <= radius * 0.08
 
