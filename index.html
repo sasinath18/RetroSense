@@ -59,10 +59,10 @@
           <label>MAXIMUM SCALE VALUE<input id="maxValue" type="number" required placeholder="e.g. 250"></label>
           <label>WARNING ABOVE<input id="warningLimit" type="number" required placeholder="e.g. 180"></label>
           <label>DANGER ABOVE<input id="dangerLimit" type="number" required placeholder="e.g. 220"></label>
-          <label class="angle-field">START ANGLE (DEG)<input id="startAngle" type="number" min="0" max="359" required placeholder="e.g. 135"></label>
-          <label class="angle-field">END ANGLE (DEG)<input id="endAngle" type="number" min="0" max="359" required placeholder="e.g. 45"></label>
+          <label class="angle-field">ANGLE AT MINIMUM (DEG)<input id="startAngle" type="number" min="0" max="359" required placeholder="e.g. 135"></label>
+          <label class="angle-field">ANGLE AT MAXIMUM (DEG)<input id="endAngle" type="number" min="0" max="359" required placeholder="e.g. 45"></label>
         </div>
-        <p class="calibration-hint"><b>Scale setup:</b> Choose one numbered scale ring only. Enter its printed minimum/maximum, the matching unit, and the angles where the needle points at those two values. Do not mix inner and outer scales on a dual-scale gauge.</p>
+        <p class="calibration-hint"><b>Scale setup:</b> Choose one numbered ring only. Set the exact unit and minimum/maximum printed on that ring. “Angle at minimum” and “Angle at maximum” refer to the needle direction at those tick marks. Image angles: 0° right, 90° down, 180° left, 270° up. Do not mix inner and outer scales.</p>
         <div id="analysisFeedback" class="analysis-feedback" role="status" aria-live="polite">Select an image and enter that instrument's scale before analysis.</div>
         <button class="btn btn-primary btn-wide" id="analyzeBtn">Analyze instrument <span>→</span></button>
         <p class="helper">Digital mode reads numeric text. Analog mode assumes a linear scale between your two calibration points. Image-based readings are estimates and must be checked against a known reference.</p>
