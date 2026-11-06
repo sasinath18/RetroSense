@@ -54,6 +54,24 @@ def test_pointer_outside_scale_is_rejected():
 
 
 
+def test_hough_detector_handles_small_dial_with_thin_long_needle():
+    width, height = 190, 215
+    center, radius = (98, 103), 87
+    image = np.full((height, width), 245, dtype=np.uint8)
+    cv2.circle(image, center, radius, 20, 2)
+    # The long 2-pixel measuring arm points left; the opposite counterweight is short and thicker.
+    cv2.line(image, (17, 103), center, 20, 2)
+    cv2.line(image, center, (119, 103), 20, 4)
+
+    detected = _detect_pointer_angle_hough(image, *center, radius)
+
+    assert detected is not None
+    angle, line_length, hub_offset = detected
+    assert angle == pytest.approx(180, abs=3)
+    assert line_length >= radius * 0.70
+    assert hub_offset <= radius * 0.08
+
+
 def test_hough_detector_uses_long_pointer_side_not_short_counterweight():
     size, center, radius = 400, (200, 200), 160
 
