@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pytest
 from vision import (
     angle_to_value, GaugeReadError, _select_gauge_circle,
-    _detect_pointer_angle, _detect_pointer_angle_hough, read_analog_gauge,
+    _detect_pointer_angle, _detect_pointer_angle_hough, _peak_plateau_center, read_analog_gauge,
 )
 from evaluate_samples import calculate_metrics
 
@@ -150,6 +150,30 @@ def test_radial_detector_finds_needle_tip_not_short_counterweight():
     cv2.line(image, point(40, radius * .12), point(40, radius * .30), 15, 5)
     angle, run, separation = _detect_pointer_angle(image, *center, radius, 135, 45)
     assert angle == pytest.approx(220, abs=2)
+    assert run >= 24
+
+
+def test_peak_plateau_center_removes_low_angle_bias():
+    scores = np.array([1, 2, 10, 10, 10, 10, 2, 1], dtype=np.float32)
+    assert _peak_plateau_center(scores) == 3
+
+
+def test_radial_detector_recovers_small_dial_horizontal_pointer():
+    width, height = 190, 215
+    center, radius = (98, 103), 87
+    image = np.full((height, width), 245, dtype=np.uint8)
+    cv2.circle(image, center, radius, 220, 2)
+    tip_angle = 175
+    tip = (
+        int(center[0] + math.cos(math.radians(tip_angle)) * radius * 0.82),
+        int(center[1] + math.sin(math.radians(tip_angle)) * radius * 0.82),
+    )
+    cv2.line(image, center, tip, 25, 3)
+
+    angle, run, separation = _detect_pointer_angle(image, *center, radius, 130, 40)
+
+    assert angle == pytest.approx(tip_angle, abs=2)
+    assert angle_to_value(angle, 0, 120, 130, 40) == pytest.approx(20, abs=1)
     assert run >= 24
 
 
