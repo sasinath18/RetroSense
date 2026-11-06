@@ -217,6 +217,7 @@ def read_analog_gauge(image_bytes, min_value, max_value, start_angle=135.0, end_
         diagnostics = {
             "pointer_line_length_px": round(pointer_length, 2),
             "pointer_hub_offset_px": round(hub_offset, 2),
+            "pointer_direction_rule": "longer_arm",
             "detection_method": "hough_center_crossing_line",
         }
     else:
