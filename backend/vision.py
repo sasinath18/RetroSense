@@ -141,6 +141,23 @@ def _detect_pointer_angle_hough(gray, cx, cy, radius):
     return float(angle), float(length), float(hub_offset)
 
 
+def _peak_plateau_center(scores):
+    """Choose the centre of a flat best-score plateau, avoiding a low-angle bias."""
+    if len(scores) == 0:
+        raise GaugeReadError("No pointer direction scores were produced.")
+    best = int(np.argmax(scores))
+    maximum = float(scores[best])
+    tolerance = max(1.0, abs(maximum) * 0.01)
+    near_best = scores >= maximum - tolerance
+    left = best
+    right = best
+    while left > 0 and near_best[left - 1]:
+        left -= 1
+    while right + 1 < len(scores) and near_best[right + 1]:
+        right += 1
+    return (left + right) // 2
+
+
 def _detect_pointer_angle(gray, cx, cy, radius, start_angle, end_angle):
     """Find the strongest dark radial pointer segment while excluding outer tick marks."""
     height, width = gray.shape
@@ -171,7 +188,7 @@ def _detect_pointer_angle(gray, cx, cy, radius, start_angle, end_angle):
 
     # Smooth neighbouring rays to tolerate a pointer wider than one pixel.
     scores = np.convolve(scores, np.ones(5, dtype=np.float32) / 5, mode="same")
-    best = int(np.argmax(scores))
+    best = _peak_plateau_center(scores)
     if run_lengths[best] < 14:
         raise GaugeReadError("No continuous pointer segment found inside the dial. Improve focus or lighting.")
 
